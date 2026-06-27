@@ -87,3 +87,27 @@ Cursor 没有持久跨 session 记忆。接法：
 3. 调用工具问用户
 
 这避免了一上来就把整段代码塞进上下文，是抗污染的关键。
+
+## 推送鉴权发现（agent 自助 push 时的优先级）
+
+当 agent 需要把记忆库/仓库推到 GitHub 时，按此优先级**自动**寻找可用鉴权，**永远不要把"问用户要密码"当作选项**——GitHub 自 2020 年起移除了用密码调 API 的能力，密码只会让用户暴露凭据且必然失败：
+
+1. **`gh` CLI** —— `gh auth status` 已登录则直接 `gh repo create` / `git push`（最干净）。
+2. **凭据管理器 / GCM token** —— 桌面客户端（GitHub Desktop 等）登录后会把 OAuth token 存在系统凭据管理器。用 `git -c credential.helper=manager credential fill`（Windows）或对应 helper 取出，scopes 含 `repo` 即可建库 + HTTPS 推送。用户通常不知道它存在，agent 要主动去挖。
+3. **Personal Access Token** —— 用户在网页生成（`repo` + 按需 `admin:public_key`），贴给 agent。用完即删。
+4. **SSH key** —— 用户注册公钥到账号后，`git push git@github.com:...`。
+
+鉴权铁律：**用户在对话里发的任何凭据，用完即建议轮换，且绝不写进记忆库/仓库**（`scripts/secret-scan.sh` 是兜底）。
+
+## 跨项目深层聚合视图（接口占位，暂不实现）
+
+本范式的真正杠杆在多 agent 接力 / 团队场景：深层化石层成为**共享认知**。预期演化方向是一个**只读的跨项目深层聚合视图**——把多个项目库的 `深层/AI深度思考.md` 汇总，按日期/隐患聚类，发现跨项目复现的结构性问题。
+
+接口约定（留给将来实现，不急）：
+
+- 输入：库根 `INDEX.md` 列出的项目库路径列表。
+- 读取：每个项目库的 `深层/AI深度思考.md`，解析 `## YYYY-MM-DD` 节 + 四子节。
+- 输出：按"隐患"子节聚类的时间线视图（只读，不回写任何项目库）。
+- 铁律：聚合视图**只读**，永远不修改各项目库的深层原文（深层只追加不删的原则不容破坏）。
+
+实现建议：一个 `examples/aggregate.py`，纯 stdlib，输出 Markdown 报告。等真实多项目场景出现再做。

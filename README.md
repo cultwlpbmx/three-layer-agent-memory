@@ -65,23 +65,43 @@
 | 文件 | 作用 |
 |---|---|
 | [`PROTOCOL.md`](PROTOCOL.md) | 协议规范：recall / writeback / consolidate 三个检查点的完整规则 |
-| [`SCHEMA.md`](SCHEMA.md) | 存储模式：目录布局、文件命名、字段约定 |
+| [`SCHEMA.md`](SCHEMA.md) | 存储模式：目录布局、文件命名、字段约定、本地化映射 |
 | [`PARADIGM.md`](PARADIGM.md) | 范式定位：为什么这是一套"程序范式"而非笔记模板 |
 | [`EVOLUTION.md`](EVOLUTION.md) | 自我进化：深层反思闭环、隐患挖掘、准则更新机制 |
-| [`INTEGRATION.md`](INTEGRATION.md) | 集成：如何接入 Claude Code / Cursor / 自研 agent，hook 契约 |
-| [`_template/`](_template/) | 模板套件：复制即用，含三层骨架文件 |
+| [`INTEGRATION.md`](INTEGRATION.md) | 集成：如何接入 Claude Code / Cursor / 自研 agent，hook 契约，推送鉴权 |
+| [`_template/`](_template/) | 模板套件（中文，canonical）：复制即用，含三层骨架文件 |
+| [`_template-en/](_template-en/) | 模板套件（英文，Surface/Middle/Deep） |
+| [`examples/memory_adapter.py`](examples/memory_adapter.py) | 可运行参考实现：三个 hook 的 CLI，locale 自适应 |
+| [`scripts/secret-scan.sh`](scripts/secret-scan.sh) | 推送前密钥扫描（防止把真实密钥推公开） |
+| [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) | 可选 CI：每次 push/PR 自动跑密钥扫描 |
 | [`case-study.md`](case-study.md) | 脱敏案例：长任务线中三层记忆如何防止上下文漂移 |
 | [`adapters/claude-code.md`](adapters/claude-code.md) | Claude Code 适配：auto-memory 指针 + skill + hooks |
+
+## 适用边界 / Boundaries
+
+本范式擅长：
+- 长周期、多版本、会丢失上下文的项目（数周到数月）
+- 多 session / 多 agent 接力的工作流
+- 需要保留"我们为什么这么决定"的审计场景
+- 有明确宗旨/哲学、需要锚定不偏航的产品
+
+本范式不擅长：
+- 一次性问答、短任务（开销大于收益）
+- 纯检索型任务（用 vector RAG 更直接）
+- 无文件系统访问的纯沙箱 agent（需要 adapter 改用远端存储）
+
+**诚实的边界**：本范式只强制**机制**（何时读/写哪一层、用哪个模板），**不强制反思质量**。深层四节写得多深，取决于模型反思能力——**模型越弱，进化越慢**。弱模型会把深层写成流水账，进化闭环退化为"记日记"。这不是 bug，是固有边界；用 hook/skill 强制检查点执行能防"跳过"，但防不了"写浅"。它不与 RAG/向量检索冲突——后者解决"找相关知识"，本范式解决"保持方向与自我"，可叠加。
 
 ## 快速开始
 
 ```bash
 git clone https://github.com/cultwlpbmx/three-layer-agent-memory.git
-cp -r three-layer-agent-memory/_template /path/to/your-project-memory
+cp -r three-layer-agent-memory/_template /path/to/your-project-memory   # 或 _template-en
 # 重命名目录为项目名，填写 表层/00-项目总览.md，开始记第一篇中层任务
+# 推送前：./scripts/secret-scan.sh   # 确认没把真实密钥写进库
 ```
 
-让你的 agent 读 `PROTOCOL.md` 并遵守三个检查点即可。无需任何运行时依赖。
+让你的 agent 读 `PROTOCOL.md` 并遵守三个检查点即可。要省事就接上 `examples/memory_adapter.py`。无需任何运行时依赖（adapter 仅用 Python 标准库）。
 
 ## 许可
 

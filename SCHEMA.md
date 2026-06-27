@@ -58,6 +58,8 @@
 
 > ⚠️ 密钥安全：表层只写密钥的**位置指引**（如"`/root/x/.env` 含 ALIYUN_API_KEY"），**永远不**在记忆库明文存放可执行凭据。记忆库会被 git 跟踪、可能公开。
 
+> 🔒 **强制**：推送前跑 `scripts/secret-scan.sh`（或启用 `.github/workflows/secret-scan.yml` CI）。它 grep 常见密钥模式（ghp_/gho_/AKIA/私钥头/带密码的 DB URI 等），命中即阻断。这是"忘了只写位置"的最后一道网。
+
 ### 表层 / 01-待完成任务.md
 
 - 用 `- [ ]` / `- [x]` 标记
@@ -97,6 +99,27 @@
 | 深层分节 | `## YYYY-MM-DD <主题>` |
 | 中层模板 | `_任务模板.md`（留作复制，不删除） |
 | 表层文件 | `00-项目总览.md`、`01-待完成任务.md`（数字前缀保证排序） |
+
+## 本地化（Localization）
+
+> **目录名可本地化，三层语义不变。** 范式不绑定中文。
+> `_template/` 是中文布局（canonical），`_template-en/` 是英文布局；复制其一即可。
+> 参考实现 `examples/memory_adapter.py` 自动探测两种布局。
+
+中英文件名映射：
+
+| 层 | 中文（canonical） | 英文 |
+|---|---|---|
+| 表层目录 | `表层/` | `Surface/` |
+| 中层目录 | `中层/` | `Middle/` |
+| 深层目录 | `深层/` | `Deep/` |
+| 表层总览 | `00-项目总览.md` | `00-overview.md` |
+| 表层待办 | `01-待完成任务.md` | `01-todo.md` |
+| 中层索引 | `INDEX-任务流水.md` | `INDEX-task-log.md` |
+| 中层模板 | `_任务模板.md` | `_task-template.md` |
+| 深层反思 | `AI深度思考.md` | `AI-deep-reflection.md` |
+
+混用不建议（一个项目库内统一用一种语言布局），但跨项目库可以各自选用。
 
 ## 为什么用文件系统而不用数据库
 
