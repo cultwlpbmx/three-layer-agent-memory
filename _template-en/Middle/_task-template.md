@@ -5,6 +5,7 @@
 
 - **Timestamp**: YYYY-MM-DD HH:MM (start) → HH:MM (end)
 - **Version/branch**: <e.g. V5.4.14 / backend>
+- **tags**: <#tag1 #tag2, e.g. #auth #deploy #fix; see SCHEMA.md for recommended tags>
 - **Entry**: <what triggered this work — a user report, a bug, a planned item>
 
 ## Task checklist

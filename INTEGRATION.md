@@ -9,9 +9,9 @@
 
 | Hook | 触发时机 | 应执行 | 对应检查点 |
 |---|---|---|---|
-| `on_session_start` | 会话开始 / 任务接入 | recall 4 步：读表层总览→待办→中层近 1–2 条→深层末尾 | recall |
-| `on_milestone` | 一个可独立验证的产出完成 | writeback：新建中层任务记录 + INDEX 置顶插指针 | writeback |
-| `on_day_end` | 每天结束 / 重大节点 | consolidate：更新表层待办/摘要 + 深层追加四节反思 | consolidate |
+| `on_session_start` | 会话开始 / 任务接入 | recall 6 步：读表层总览→待办→未知区→中层近 1–2 条→深层末尾→全局深层末尾 | recall |
+| `on_milestone` | 一个可独立验证的产出完成 | writeback：新建中层任务记录（含 tags 行）+ INDEX 置顶插指针 | writeback |
+| `on_day_end` | 每天结束 / 重大节点 | consolidate：更新表层待办/摘要 + 提炼中层重复模式 + 深层追加四节反思 + 跨项目法则写入全局深层 | consolidate |
 
 输入/输出契约：
 
@@ -25,18 +25,24 @@
 def on_session_start(project_memory_dir):
     overview   = read(f"{project_memory_dir}/表层/00-项目总览.md")
     todo       = read(f"{project_memory_dir}/表层/01-待完成任务.md")
+    unknowns   = read(f"{project_memory_dir}/表层/02-未知与开放问题.md")  # if exists
     recent     = head(f"{project_memory_dir}/中层/INDEX-任务流水.md", n=2)
     reflection = tail_section(f"{project_memory_dir}/深层/AI深度思考.md", n=1)
-    return inject_as_context(overview, todo, recent, reflection)
+    global_deep = tail_section(Path.home() / ".agent-memory/global-deep/global-reflection.md", n=1)  # if configured
+    return inject_as_context(overview, todo, unknowns, recent, reflection, global_deep)
 
 def on_milestone(project_memory_dir, task_meta):
-    path = render_template("_template/中层/_任务模板.md", task_meta)
+    path = render_template("_template/中层/_任务模板.md", task_meta)  # includes tags line
     write(f"{project_memory_dir}/中层/{path.name}", path.content)
     prepend_index(f"{project_memory_dir}/中层/INDEX-任务流水.md", task_meta)
 
 def on_day_end(project_memory_dir, reflection_meta):
     update_todo(f"{project_memory_dir}/表层/01-待完成任务.md")
-    append_deep(f"{project_memory_dir}/深层/AI深度思考.md", reflection_meta)
+    # distill: scan recent middle-layer records for recurring patterns (N>=2)
+    rules = distill_patterns(f"{project_memory_dir}/中层/", recent_n=5)
+    append_deep(f"{project_memory_dir}/深层/AI深度思考.md", reflection_meta, rules)
+    if reflection_meta.get("cross_project"):
+        append_global_deep(Path.home() / ".agent-memory/global-deep/global-reflection.md", reflection_meta)
 ```
 
 ## Claude Code
@@ -99,15 +105,56 @@ Cursor 没有持久跨 session 记忆。接法：
 
 鉴权铁律：**用户在对话里发的任何凭据，用完即建议轮换，且绝不写进记忆库/仓库**（`scripts/secret-scan.sh` 是兜底）。
 
-## 跨项目深层聚合视图（接口占位，暂不实现）
+## 全局深层库（跨项目记忆）
 
-本范式的真正杠杆在多 agent 接力 / 团队场景：深层化石层成为**共享认知**。预期演化方向是一个**只读的跨项目深层聚合视图**——把多个项目库的 `深层/AI深度思考.md` 汇总，按日期/隐患聚类，发现跨项目复现的结构性问题。
+人类不是每个项目一个大脑——项目 A 踩过的坑不会在项目 B 重踩。全局深层库让 agent 上手新项目时就带着所有项目的经验。
 
-接口约定（留给将来实现，不急）：
+### 布局
 
-- 输入：库根 `INDEX.md` 列出的项目库路径列表。
-- 读取：每个项目库的 `深层/AI深度思考.md`，解析 `## YYYY-MM-DD` 节 + 四子节。
-- 输出：按"隐患"子节聚类的时间线视图（只读，不回写任何项目库）。
-- 铁律：聚合视图**只读**，永远不修改各项目库的深层原文（深层只追加不删的原则不容破坏）。
+```
+~/.agent-memory/                       # 用户级，不在任何项目库内
+└── global-deep/
+    └── global-reflection.md           # 跨项目经验法则，按 ## YYYY-MM-DD 追加
+```
 
-实现建议：一个 `examples/aggregate.py`，纯 stdlib，输出 Markdown 报告。等真实多项目场景出现再做。
+### 规则
+
+- 格式与项目深层一致：`## YYYY-MM-DD <主题>` 分节追加，不删旧节
+- 只接受**跨项目经验法则**（"来自 N≥2 次实践的跨项目通则"）。单项目经验留在项目深层
+- recall 时：若全局深层存在，先读其末尾一节（协议检查点 1 第 6 步）
+- consolidate 时：若提炼出的法则具有跨项目通用性，同时写入项目深层和全局深层
+- 全局深层是**用户级**的，不进任何项目仓库，不推 GitHub
+
+### hook 契约扩展
+
+```python
+GLOBAL_DEEP = Path.home() / ".agent-memory" / "global-deep" / "global-reflection.md"
+
+def on_session_start(project_memory_dir):
+    # ... 原有 4 步 ...
+    if GLOBAL_DEEP.exists():
+        global_reflection = tail_section(GLOBAL_DEEP, n=1)
+        inject_as_context(..., global_reflection)
+
+def on_day_end(project_memory_dir, reflection_meta):
+    # ... 原有动作 ...
+    if reflection_meta.get("cross_project"):  # 标记为跨项目通用
+        append_global_deep(GLOBAL_DEEP, reflection_meta)
+```
+
+### 与项目深层的关系
+
+项目深层是主库（具体、近），全局深层是汇总（通用、远）。冲突时以项目深层为准。
+
+## 跨项目深层聚合视图
+
+本范式的真正杠杆在多 agent 接力 / 团队场景：深层化石层成为**共享认知**。`examples/aggregate.py` 实现跨项目深层聚合——把多个项目库的 `深层/AI深度思考.md` 汇总，按日期/隐患聚类，发现跨项目复现的结构性问题。
+
+### 接口约定
+
+- 输入：库根 `INDEX.md` 列出的项目库路径列表（或命令行指定多个项目库路径）
+- 读取：每个项目库的 `深层/AI深度思考.md`，解析 `## YYYY-MM-DD` 节 + 四子节
+- 输出：按"隐患"子节聚类的时间线 Markdown 报告（只读，不回写任何项目库）
+- 铁律：聚合视图**只读**，永远不修改各项目库的深层原文（深层只追加不删的原则不容破坏）
+
+实现：`examples/aggregate.py`，纯 stdlib，输出 Markdown 报告到 stdout 或指定文件。

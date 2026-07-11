@@ -11,10 +11,12 @@ layout your team prefers (see `../SCHEMA.md` → "Localization").
 <project>/
 ├── Surface/
 │   ├── 00-overview.md
-│   └── 01-todo.md
+│   ├── 01-todo.md
+│   └── 02-unknowns.md          # cognitive gaps + open questions (recommended)
 ├── Middle/
 │   ├── INDEX-task-log.md
-│   └── _task-template.md        # keep for copying, don't delete
+│   ├── _task-template.md        # keep for copying, don't delete
+│   └── archive/                 # archived records (after 20+ entries)
 └── Deep/
     └── AI-deep-reflection.md
 ```

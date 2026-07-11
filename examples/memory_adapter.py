@@ -6,8 +6,12 @@ A minimal, dependency-free, runnable implementation of the three protocol
 checkpoints (see ../PROTOCOL.md). Wire your agent's lifecycle hooks to the
 three subcommands and you are "running on the paradigm" — no framework lock-in.
 
-  recall        <- on_session_start   load 4 recall files into working memory
+  recall        <- on_session_start   load recall files into working memory
+                  recall --tag 鉴权    filter middle-layer index by tag (associative recall)
+
   log           <- on_milestone       create a middle-layer task record + index pointer
+                  log --tags "#鉴权 #网络"  add tags line to the task record
+
   consolidate   <- on_day_end         append a deep-layer reflection (the evolution point)
 
 Locale-aware: auto-detects Chinese layer dirs (表层/中层/深层) or English
@@ -120,9 +124,44 @@ def cmd_recall(args) -> int:
             ln for ln in path.read_text(encoding="utf-8").splitlines()
             if ln.strip().startswith("|") and not set(ln.strip()) <= set("|- ")
         ]
-        # drop the header row (first one left after separator filter)
         rows = [r for r in rows if not r.strip().startswith("| 日期") and "|----" not in r]
         return "\n".join(rows[-n:])
+
+    def tail_table_tagged(path: Path, tag: str) -> str:
+        """INDEX rows whose corresponding task files contain the given tag."""
+        if not path.exists():
+            return f"[missing: {path.name}]"
+        rows = [
+            ln for ln in path.read_text(encoding="utf-8").splitlines()
+            if ln.strip().startswith("|") and not set(ln.strip()) <= set("|- ")
+        ]
+        rows = [r for r in rows if not r.strip().startswith("| 日期") and "|----" not in r]
+
+        # parse each row to get the filename, then grep the task file for the tag
+        tag_lower = tag.lower()
+        matched = []
+        for row in rows:
+            parts = [c.strip() for c in row.split("|")]
+            # split gives ['', date, filename, description, ''] — filename is index 2
+            if len(parts) < 4:
+                continue
+            fname = parts[2].strip("`")
+            if not fname or fname.startswith("YYYY"):
+                continue
+            # strip archive/ prefix if present
+            task_path = p["middle_dir"] / fname
+            if not task_path.exists():
+                # try archive
+                task_path = p["middle_dir"] / "archive" / fname
+            if not task_path.exists():
+                continue
+            try:
+                content = task_path.read_text(encoding="utf-8").lower()
+                if f"#{tag_lower}" in content:
+                    matched.append(row)
+            except Exception:
+                continue
+        return "\n".join(matched) if matched else f"(no task records tagged #{tag})"
 
     def last_deep_section(path: Path) -> str:
         if not path.exists():
@@ -134,20 +173,38 @@ def cmd_recall(args) -> int:
         s = starts[-1]
         return text[s:].rstrip()
 
+    # check for optional files
+    unknowns_path = p["overview"].parent / ("02-未知与开放问题.md" if loc is ZH else "02-unknowns.md")
+    unknowns = head(unknowns_path, 30) if unknowns_path.exists() else "(not configured)"
+
+    # global deep layer (cross-project memory)
+    global_deep = Path.home() / ".agent-memory" / "global-deep" / "global-reflection.md"
+    global_section = last_deep_section(global_deep) if global_deep.exists() else "(not configured)"
+
+    tag_filter = getattr(args, "tag", None)
+
     summary = f"""# Recall summary — {root.name} ({date.today()})
 
-## [1/4] Surface overview ({p['overview'].name})
+## [1/6] Surface overview ({p['overview'].name})
 {head(p['overview'], 40)}
 
-## [2/4] Surface todo ({p['todo'].name})
+## [2/6] Surface todo ({p['todo'].name})
 {head(p['todo'], 40)}
 
-## [3/4] Middle recent (last 2 of {p['index'].name})
-{tail_table(p['index'], 2)}
+## [3/6] Surface unknowns ({unknowns_path.name if unknowns_path.exists() else 'not configured'})
+{unknowns}
 
-## [4/4] Deep last reflection ({p['deep_file'].name})
+## [4/6] Middle recent (last 2 of {p['index'].name})
+{tail_table(p['index'], 2) if not tag_filter else tail_table_tagged(p['index'], tag_filter)}
+
+## [5/6] Deep last reflection ({p['deep_file'].name})
 {last_deep_section(p['deep_file'])}
+
+## [6/6] Global deep (cross-project, {global_deep.name if global_deep.exists() else 'not configured'})
+{global_section}
 """
+    if tag_filter:
+        print(f"[recall] tag filter: #{tag_filter} — showing only matching middle-layer records", file=sys.stderr)
     print(summary)
     print(
         "[recall] inject the above into working memory, then act. "
@@ -163,6 +220,7 @@ TASK_TEMPLATE = """# {date} {version} — {summary}
 
 - **时间戳**：{date}（开始）→（结束）
 - **版本/分支**：{version}
+- **tags**：{tags}
 - **入口**：{entry}
 
 ## 任务清单
@@ -193,6 +251,7 @@ TASK_TEMPLATE_EN = """# {date} {version} — {summary}
 
 - **Timestamp**: {date} (start) → (end)
 - **Version/branch**: {version}
+- **tags**: {tags}
 - **Entry**: {entry}
 
 ## Task checklist
@@ -237,9 +296,11 @@ def cmd_log(args) -> int:
     fname = f"{today}_{args.version}_{safe_summary}.md"
     task_path = p["middle_dir"] / fname
 
+    tags = getattr(args, "tags", None) or "<#标签1 #标签2>"
     tmpl = TASK_TEMPLATE_EN if is_en else TASK_TEMPLATE
     content = tmpl.format(
-        date=today, version=args.version, summary=args.summary, entry=args.entry
+        date=today, version=args.version, summary=args.summary,
+        entry=args.entry, tags=tags
     )
     task_path.write_text(content, encoding="utf-8")
 
@@ -340,8 +401,9 @@ def main(argv=None) -> int:
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    pr = sub.add_parser("recall", help="on_session_start: load 4 recall files")
+    pr = sub.add_parser("recall", help="on_session_start: load recall files")
     pr.add_argument("memory_dir")
+    pr.add_argument("--tag", help="filter middle-layer records by tag (associative recall, e.g. 鉴权)")
     pr.set_defaults(func=cmd_recall)
 
     pl = sub.add_parser("log", help="on_milestone: write a middle-layer task record")
@@ -349,6 +411,7 @@ def main(argv=None) -> int:
     pl.add_argument("--version", required=True, help="e.g. V5.4.14 or backend")
     pl.add_argument("--summary", required=True, help="short description (filename-safe)")
     pl.add_argument("--entry", default="<本次工作起点>", help="what triggered this work")
+    pl.add_argument("--tags", default=None, help='tags line, e.g. "#鉴权 #网络"')
     pl.set_defaults(func=cmd_log)
 
     pc = sub.add_parser("consolidate", help="on_day_end: append a deep reflection")

@@ -18,10 +18,14 @@
 | 认知科学概念 | 本范式对应 | 物理形态 |
 |---|---|---|
 | 语义记忆（慢变事实/信念） | 表层 | `表层/00-项目总览.md` |
-| 情景记忆（带时间戳的事件） | 中层 | `中层/YYYY-MM-DD_*.md` |
+| 情景记忆（带时间戳的事件） | 中层 | `中层/YYYY-MM-DD_*.md`（含 tags 联想索引） |
 | 元认知（对自身的反思） | 深层 | `深层/AI深度思考.md` |
-| 工作记忆初始化 | 开机必读协议 | recall 4 步 |
-| 记忆巩固（睡眠期的回放/重写） | 阶段记中层 + 每天更新表层/深层 | writeback 3 步 |
+| 工作记忆初始化 | 开机必读协议 | recall 6 步 |
+| 记忆巩固（睡眠期的回放/重写） | 阶段记中层 + 每天更新表层/深层 + **提炼重复模式** | writeback + consolidate |
+| 记忆压缩/归档（防止膨胀） | 中层归档机制 | `中层/archive/`（超阈值压缩为摘要行） |
+| 联想记忆（场景触发相关记忆） | 标签联想回溯 | `--tag` 参数按标签过滤 |
+| 跨项目记忆迁移 | 全局深层库 | `~/.agent-memory/global-deep/` |
+| 元认知边界（知道不知道什么） | 未知与开放问题 | `表层/02-未知与开放问题.md` |
 
 ## 为什么需要它
 
@@ -38,25 +42,31 @@
 <project>/
 ├── 表层/                      # 稳定。开机读一眼找回初心。
 │   ├── 00-项目总览.md         # 名称/目的/宗旨/哲学/需求/偏好/服务器指引/内容摘要/项目大纲
-│   └── 01-待完成任务.md       # 高频更新，单独成文件
-├── 中层/                      # 流水。每阶段任务一篇。
-│   ├── INDEX-任务流水.md      # 时间线索引，新任务置顶插一行
-│   └── YYYY-MM-DD_<版本或主题>_<简述>.md
+│   ├── 01-待完成任务.md       # 高频更新，单独成文件
+│   └── 02-未知与开放问题.md    # 认知缺口 + 开放问题（推荐，可选）
+├── 中层/                      # 流水。每阶段任务一篇，含 tags 行（联想回溯）。
+│   ├── INDEX-任务流水.md      # 时间线索引，新任务置顶插行
+│   ├── YYYY-MM-DD_<版本或主题>_<简述>.md
+│   ├── _任务模板.md           # 留作复制
+│   └── archive/              # 归档区（超 20 篇后压缩为摘要行）
 └── 深层/                      # 反思。AI 高于人类常规认知的审视。
     └── AI深度思考.md           # 按日期分节追加，不拆文件、不删旧节
+
+~/.agent-memory/global-deep/   # 用户级，跨项目经验法则（不在任何项目库内）
+└── global-reflection.md        # 新项目 recall 时先读，继承所有项目经验
 ```
 
 ## 协议（agent 必须遵守的 3 个检查点）
 
-1. **开机 / 任务开始** → recall：读表层总览 → 待办 → 中层最近 1–2 条 → 深层末尾。
-2. **阶段任务完成** → writeback：在中层新建一篇任务记录，并在 INDEX 置顶插指针。
-3. **每天结束 / 重大节点** → consolidate：更新表层待办与摘要，在深层**追加**一段反思（现状审视/优化方案/隐患/预期）。
+1. **开机 / 任务开始** → recall：读表层总览 → 待办 → 未知与开放问题（若有）→ 中层最近 1–2 条 → 深层末尾 → 全局深层末尾（若配置）。
+2. **阶段任务完成** → writeback：在中层新建一篇任务记录（含 tags 行），并在 INDEX 置顶插指针。
+3. **每天结束 / 重大节点** → consolidate：更新表层待办与摘要，**从中层提炼重复模式为经验法则**，在深层**追加**一段反思（现状审视/优化方案/隐患/预期）。若法则跨项目通用，同时写入全局深层。
 
 详见 [`PROTOCOL.md`](PROTOCOL.md)。
 
 ## 自我进化机制
 
-深层 + INDEX 构成一个**持久化的自我改进闭环**：agent 每次反思都追加进 `AI深度思考.md`，下次开机必读末尾。重复出现的隐患会被识别为结构性问题，进而推动表层宗旨/准则的更新。这就是 agent 的"进化"——不是改权重，而是改自己的**信念与行为准则**。
+深层 + INDEX 构成一个**持久化的自我改进闭环**：agent 每次反思都追加进 `AI深度思考.md`，下次开机必读末尾。consolidate 时从中层任务记录里**提炼跨任务重复模式**（N≥2 才提炼），将其转化为经验法则。重复出现的隐患会被识别为结构性问题，进而推动表层宗旨/准则的更新。跨项目通用的法则写入全局深层，让新项目继承所有旧项目的经验。这就是 agent 的"进化"——不是改权重，而是改自己的**信念与行为准则**。
 
 详见 [`EVOLUTION.md`](EVOLUTION.md)。
 
@@ -64,14 +74,15 @@
 
 | 文件 | 作用 |
 |---|---|
-| [`PROTOCOL.md`](PROTOCOL.md) | 协议规范：recall / writeback / consolidate 三个检查点的完整规则 |
-| [`SCHEMA.md`](SCHEMA.md) | 存储模式：目录布局、文件命名、字段约定、本地化映射 |
+| [`PROTOCOL.md`](PROTOCOL.md) | 协议规范：recall / writeback / consolidate 三个检查点（含提炼协议） |
+| [`SCHEMA.md`](SCHEMA.md) | 存储模式：目录布局、文件命名、字段约定、标签、归档、全局深层、本地化映射 |
 | [`PARADIGM.md`](PARADIGM.md) | 范式定位：为什么这是一套"程序范式"而非笔记模板 |
-| [`EVOLUTION.md`](EVOLUTION.md) | 自我进化：深层反思闭环、隐患挖掘、准则更新机制 |
-| [`INTEGRATION.md`](INTEGRATION.md) | 集成：如何接入 Claude Code / Cursor / 自研 agent，hook 契约，推送鉴权 |
-| [`_template/`](_template/) | 模板套件（中文，canonical）：复制即用，含三层骨架文件 |
-| [`_template-en/](_template-en/) | 模板套件（英文，Surface/Middle/Deep） |
-| [`examples/memory_adapter.py`](examples/memory_adapter.py) | 可运行参考实现：三个 hook 的 CLI，locale 自适应 |
+| [`EVOLUTION.md`](EVOLUTION.md) | 自我进化：深层反思闭环、提炼规则、隐患挖掘、准则更新机制 |
+| [`INTEGRATION.md`](INTEGRATION.md) | 集成：hook 契约 + 全局深层库 + 跨项目聚合 + 推送鉴权 |
+| [`_template/`](_template/) | 模板套件（中文，canonical）：含表层/中层/深层 + 未知与开放问题 + archive |
+| [`_template-en/](_template-en/) | 模板套件（英文，Surface/Middle/Deep + 02-unknowns） |
+| [`examples/memory_adapter.py`](examples/memory_adapter.py) | 可运行参考实现：recall/log/consolidate + `--tag` 联想回溯 + 全局深层 |
+| [`examples/aggregate.py`](examples/aggregate.py) | 跨项目深层聚合：只读报告，按时间线/隐患/跨项目重复主题聚类 |
 | [`scripts/secret-scan.sh`](scripts/secret-scan.sh) | 推送前密钥扫描（防止把真实密钥推公开） |
 | [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) | 可选 CI：每次 push/PR 自动跑密钥扫描 |
 | [`case-study.md`](case-study.md) | 脱敏案例：长任务线中三层记忆如何防止上下文漂移 |
@@ -90,7 +101,7 @@
 - 纯检索型任务（用 vector RAG 更直接）
 - 无文件系统访问的纯沙箱 agent（需要 adapter 改用远端存储）
 
-**诚实的边界**：本范式只强制**机制**（何时读/写哪一层、用哪个模板），**不强制反思质量**。深层四节写得多深，取决于模型反思能力——**模型越弱，进化越慢**。弱模型会把深层写成流水账，进化闭环退化为"记日记"。这不是 bug，是固有边界；用 hook/skill 强制检查点执行能防"跳过"，但防不了"写浅"。它不与 RAG/向量检索冲突——后者解决"找相关知识"，本范式解决"保持方向与自我"，可叠加。
+**诚实的边界**：本范式只强制**机制**（何时读/写哪一层、用哪个模板），**不强制反思质量**。深层四节写得多深，取决于模型反思能力——**模型越弱，进化越慢**。弱模型会把深层写成流水账，进化闭环退化为"记日记"。提炼协议（N≥2 才提炼、证据链强制）是对策，但不是根治——它防"随意提炼"，不防"提炼不出"。它不与 RAG/向量检索冲突——后者解决"找相关知识"，本范式解决"保持方向与自我"，可叠加。全局深层、标签、归档、未知区都是**可选增强**，核心四条不变约束不变。
 
 ## 快速开始
 
@@ -98,10 +109,12 @@
 git clone https://github.com/cultwlpbmx/three-layer-agent-memory.git
 cp -r three-layer-agent-memory/_template /path/to/your-project-memory   # 或 _template-en
 # 重命名目录为项目名，填写 表层/00-项目总览.md，开始记第一篇中层任务
+# （可选）填写 表层/02-未知与开放问题.md，记录认知缺口
+# （可选）配置 ~/.agent-memory/global-deep/ 实现跨项目记忆
 # 推送前：./scripts/secret-scan.sh   # 确认没把真实密钥写进库
 ```
 
-让你的 agent 读 `PROTOCOL.md` 并遵守三个检查点即可。要省事就接上 `examples/memory_adapter.py`。无需任何运行时依赖（adapter 仅用 Python 标准库）。
+让你的 agent 读 `PROTOCOL.md` 并遵守三个检查点即可。要省事就接上 `examples/memory_adapter.py`（recall/log/consolidate + `--tag` 联想回溯 + 全局深层）。跨项目聚合用 `examples/aggregate.py`。无需任何运行时依赖（仅用 Python 标准库）。
 
 ## 许可
 
