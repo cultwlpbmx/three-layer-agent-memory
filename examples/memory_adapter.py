@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """
-Three-Layer Agent Memory — reference adapter.
+Three-Layer Agent Memory — CLI (canonical, thin wrapper over the library).
 
-A minimal, dependency-free, runnable implementation of the three protocol
-checkpoints (see ../PROTOCOL.md). Wire your agent's lifecycle hooks to the
-three subcommands and you are "running on the paradigm" — no framework lock-in.
+This CLI is the "readable in 5 minutes" face of the paradigm. It delegates all
+logic to the `three_layer_memory` package so there is one source of truth —
+the CLI is just argparse wiring + stdout printing.
 
   recall        <- on_session_start   load recall files into working memory
                   recall --tag 鉴权    filter middle-layer index by tag (associative recall)
@@ -14,376 +14,83 @@ three subcommands and you are "running on the paradigm" — no framework lock-in
 
   consolidate   <- on_day_end         append a deep-layer reflection (the evolution point)
 
+  validate      ad-hoc               check schema conformance
+  snapshot      ad-hoc               render a static HTML/MD snapshot
+  init          ad-hoc               scaffold a new project memory from template
+
 Locale-aware: auto-detects Chinese layer dirs (表层/中层/深层) or English
 (Surface/Middle/Deep). See ../SCHEMA.md "Localization".
 
-Usage:
-  python memory_adapter.py recall <memory_dir>
-
-  python memory_adapter.py log <memory_dir> \
-      --version V5.4.14 --summary "测试反馈修复" \
-      --entry "用户反馈十项"
-
-  python memory_adapter.py consolidate <memory_dir> \
-      --topic "范式提取" \
-      --review "整体判断…" \
-      --plan "结构性更优的路径…" \
-      --risk "还未爆但会爆的点…" \
-      --forecast "若按当前轨迹，短/中期会发生什么…"
-
 Exit codes: 0 success, 1 bad usage, 2 missing memory dir / files.
 """
-
 from __future__ import annotations
 
 import argparse
-import re
 import sys
-from datetime import date
 from pathlib import Path
 
-# Force UTF-8 stdout/stderr — Windows consoles default to cp936/GBK and choke on
-# the ⚠ / 中文 chars that legitimately appear in memory files.
+# Make the library importable when running the script directly from a checkout
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from three_layer_memory import Memory, init as init_lib
+from three_layer_memory.snapshot import snapshot as snapshot_lib
+from three_layer_memory.graph import (
+    build_graph as build_graph_lib,
+    load_graph as load_graph_lib,
+    query_entities, query_relations, query_neighbors, query_timeline,
+    graph_summary,
+    detect_contradictions as detect_contras,
+    query_evolution,
+)
+from three_layer_memory.auto_activation import activate as activate_lib, activation_summary
+from three_layer_memory.deviation_monitor import check_deviation as check_dev, deviation_report
+from three_layer_memory.auto_consolidate import discover_patterns as discover_pats, pattern_report
+from three_layer_memory.reflection_quality import assess_reflections as assess_refl, quality_report
+from three_layer_memory.meta_meta_cognition import discover_blind_spots as discover_bs, blind_spot_report
+from three_layer_memory.cross_project import transfer_knowledge as transfer_kn, transfer_report
+from three_layer_memory.prediction_tracker import track_predictions as track_preds, prediction_report as pred_report
+from three_layer_memory.self_correction import find_stale_laws as find_stale, correction_report
+from three_layer_memory.cloud_sync import sync_status as s_status, sync_push as s_push, sync_pull as s_pull, sync_report
+
 for _stream in (sys.stdout, sys.stderr):
     try:
         _stream.reconfigure(encoding="utf-8")
     except Exception:
         pass
 
-# --- locale mapping ------------------------------------------------------------
-
-# Chinese (canonical) -> English. Both directions supported at runtime.
-ZH = {
-    "surface": "表层",
-    "middle": "中层",
-    "deep": "深层",
-    "overview": "00-项目总览.md",
-    "todo": "01-待完成任务.md",
-    "index": "INDEX-任务流水.md",
-    "task_template": "_任务模板.md",
-    "deep_file": "AI深度思考.md",
-}
-EN = {
-    "surface": "Surface",
-    "middle": "Middle",
-    "deep": "Deep",
-    "overview": "00-overview.md",
-    "todo": "01-todo.md",
-    "index": "INDEX-task-log.md",
-    "task_template": "_task-template.md",
-    "deep_file": "AI-deep-reflection.md",
-}
-
-
-def detect_locale(root: Path) -> dict:
-    """Return the layer-name map for whichever locale this memory dir uses."""
-    if (root / ZH["surface"]).is_dir():
-        return ZH
-    if (root / EN["surface"]).is_dir():
-        return EN
-    # fall back to Chinese (canonical) so error messages name expected dirs
-    return ZH
-
-
-def paths(root: Path, loc: dict) -> dict:
-    s, m, d = root / loc["surface"], root / loc["middle"], root / loc["deep"]
-    return {
-        "overview": s / loc["overview"],
-        "todo": s / loc["todo"],
-        "index": m / loc["index"],
-        "middle_dir": m,
-        "deep_file": d / loc["deep_file"],
-        "task_template": m / loc["task_template"],
-    }
-
-
-# --- checkpoint 1: recall -----------------------------------------------------
-
-DEEP_SECTION_RE = re.compile(r"^## .+", re.MULTILINE)
-
 
 def cmd_recall(args) -> int:
-    root = Path(args.memory_dir)
-    if not root.is_dir():
-        print(f"error: memory dir not found: {root}", file=sys.stderr)
-        return 2
-    loc = detect_locale(root)
-    p = paths(root, loc)
-
-    def head(path: Path, n: int) -> str:
-        if not path.exists():
-            return f"[missing: {path.name}]"
-        lines = path.read_text(encoding="utf-8").splitlines()
-        return "\n".join(lines[:n])
-
-    def tail_table(path: Path, n: int) -> str:
-        """Last n data rows of the INDEX markdown table (skip header/separators)."""
-        if not path.exists():
-            return f"[missing: {path.name}]"
-        rows = [
-            ln for ln in path.read_text(encoding="utf-8").splitlines()
-            if ln.strip().startswith("|") and not set(ln.strip()) <= set("|- ")
-        ]
-        rows = [r for r in rows if not r.strip().startswith("| 日期") and "|----" not in r]
-        return "\n".join(rows[-n:])
-
-    def tail_table_tagged(path: Path, tag: str) -> str:
-        """INDEX rows whose corresponding task files contain the given tag."""
-        if not path.exists():
-            return f"[missing: {path.name}]"
-        rows = [
-            ln for ln in path.read_text(encoding="utf-8").splitlines()
-            if ln.strip().startswith("|") and not set(ln.strip()) <= set("|- ")
-        ]
-        rows = [r for r in rows if not r.strip().startswith("| 日期") and "|----" not in r]
-
-        # parse each row to get the filename, then grep the task file for the tag
-        tag_lower = tag.lower()
-        matched = []
-        for row in rows:
-            parts = [c.strip() for c in row.split("|")]
-            # split gives ['', date, filename, description, ''] — filename is index 2
-            if len(parts) < 4:
-                continue
-            fname = parts[2].strip("`")
-            if not fname or fname.startswith("YYYY"):
-                continue
-            # strip archive/ prefix if present
-            task_path = p["middle_dir"] / fname
-            if not task_path.exists():
-                # try archive
-                task_path = p["middle_dir"] / "archive" / fname
-            if not task_path.exists():
-                continue
-            try:
-                content = task_path.read_text(encoding="utf-8").lower()
-                if f"#{tag_lower}" in content:
-                    matched.append(row)
-            except Exception:
-                continue
-        return "\n".join(matched) if matched else f"(no task records tagged #{tag})"
-
-    def last_deep_section(path: Path) -> str:
-        if not path.exists():
-            return f"[missing: {path.name}]"
-        text = path.read_text(encoding="utf-8")
-        starts = [m.start() for m in DEEP_SECTION_RE.finditer(text)]
-        if not starts:
-            return "(no reflections yet)"
-        s = starts[-1]
-        return text[s:].rstrip()
-
-    # check for optional files
-    unknowns_path = p["overview"].parent / ("02-未知与开放问题.md" if loc is ZH else "02-unknowns.md")
-    unknowns = head(unknowns_path, 30) if unknowns_path.exists() else "(not configured)"
-
-    # global deep layer (cross-project memory)
-    global_deep = Path.home() / ".agent-memory" / "global-deep" / "global-reflection.md"
-    global_section = last_deep_section(global_deep) if global_deep.exists() else "(not configured)"
-
-    tag_filter = getattr(args, "tag", None)
-
-    summary = f"""# Recall summary — {root.name} ({date.today()})
-
-## [1/6] Surface overview ({p['overview'].name})
-{head(p['overview'], 40)}
-
-## [2/6] Surface todo ({p['todo'].name})
-{head(p['todo'], 40)}
-
-## [3/6] Surface unknowns ({unknowns_path.name if unknowns_path.exists() else 'not configured'})
-{unknowns}
-
-## [4/6] Middle recent (last 2 of {p['index'].name})
-{tail_table(p['index'], 2) if not tag_filter else tail_table_tagged(p['index'], tag_filter)}
-
-## [5/6] Deep last reflection ({p['deep_file'].name})
-{last_deep_section(p['deep_file'])}
-
-## [6/6] Global deep (cross-project, {global_deep.name if global_deep.exists() else 'not configured'})
-{global_section}
-"""
-    if tag_filter:
-        print(f"[recall] tag filter: #{tag_filter} — showing only matching middle-layer records", file=sys.stderr)
-    print(summary)
+    m = Memory(args.memory_dir)
+    r = m.recall(tag=args.tag, budget=args.budget, recent_n=args.recent_n)
+    if args.tag:
+        print(f"[recall] tag filter: #{args.tag} — showing only matching middle-layer records",
+              file=sys.stderr)
+    print(f"# Recall summary — {m.root.name}\n")
+    print(r.as_prompt_block(budget=args.budget))
     print(
-        "[recall] inject the above into working memory, then act. "
+        "\n[recall] inject the above into working memory, then act. "
         "Retrieval priority: memory → code/git → ask user.",
         file=sys.stderr,
     )
     return 0
 
 
-# --- checkpoint 2: writeback (log a milestone) --------------------------------
-
-TASK_TEMPLATE = """# {date} {version} — {summary}
-
-- **时间戳**：{date}（开始）→（结束）
-- **版本/分支**：{version}
-- **tags**：{tags}
-- **入口**：{entry}
-
-## 任务清单
-- [ ] <项 1>
-- [ ] <项 2>
-
-## 完成情况
-- ✅ <完成了什么，附关键 file:line / 端点 / 版本号>
-- ⚠️ <部分完成，说明卡在哪>
-- ❌ <未完成，原因>
-
-## 遇到的困难
-- <踩坑、根因、绕过方式；写"真因"而非表象>
-
-## 关键产出
-- 代码改动：<file:line 级要点，不整段贴>
-- 部署：<脚本名、服务器、版本号、验证结果>
-- 验证：<analyze/编译/curl/真机 结果数字>
-
-## 遗留与下一步
-- [ ] <由此衍生的新待办，同步进表层 todo>
-
-## 关联
-- 相关旧记忆 / 上下层：[[...]]
-"""
-
-TASK_TEMPLATE_EN = """# {date} {version} — {summary}
-
-- **Timestamp**: {date} (start) → (end)
-- **Version/branch**: {version}
-- **tags**: {tags}
-- **Entry**: {entry}
-
-## Task checklist
-- [ ] <item 1>
-- [ ] <item 2>
-
-## Done
-- ✅ <what was done, with key file:line / endpoint / version>
-- ⚠️ <partially done, where it stuck>
-- ❌ <not done, why>
-
-## Difficulties
-- <pit, root cause, workaround; the *real* cause, not the symptom>
-
-## Key output
-- Code changes: <file:line level, no full pastes>
-- Deploy: <script, server, version, verification>
-- Verify: <analyze/compile/curl/device result numbers>
-
-## Leftover & next
-- [ ] <new todo derived, sync into surface todo>
-
-## Links
-- Related memory / layers: [[...]]
-"""
-
-INDEX_HEADER_RE = re.compile(r"^\| *日期 *\| *任务记录 *\|", re.MULTILINE)
-INDEX_HEADER_RE_EN = re.compile(r"^\| *Date *\| *Task record *\|", re.MULTILINE)
-
-
 def cmd_log(args) -> int:
-    root = Path(args.memory_dir)
-    if not root.is_dir():
-        print(f"error: memory dir not found: {root}", file=sys.stderr)
-        return 2
-    loc = detect_locale(root)
-    p = paths(root, loc)
-    is_en = loc is EN
-
-    today = date.today().isoformat()
-    safe_summary = re.sub(r"[\\/:*?\"<>|]", "_", args.summary)
-    fname = f"{today}_{args.version}_{safe_summary}.md"
-    task_path = p["middle_dir"] / fname
-
-    tags = getattr(args, "tags", None) or "<#标签1 #标签2>"
-    tmpl = TASK_TEMPLATE_EN if is_en else TASK_TEMPLATE
-    content = tmpl.format(
-        date=today, version=args.version, summary=args.summary,
-        entry=args.entry, tags=tags
-    )
-    task_path.write_text(content, encoding="utf-8")
-
-    # prepend a pointer row to the INDEX, right after the header separator
-    idx_path = p["index"]
-    if idx_path.exists():
-        text = idx_path.read_text(encoding="utf-8")
-        row = f"| {today} | `{fname}` | {args.summary} |\n" if not is_en else \
-              f"| {today} | `{fname}` | {args.summary} |\n"
-        # insert after the first |---| separator line
-        m = re.search(r"^\|[-: |]+\|\s*$", text, re.MULTILINE)
-        if m:
-            insert_at = m.end()
-            text = text[:insert_at] + "\n" + row + text[insert_at:]
-        else:
-            text = text.rstrip() + "\n" + row
-        idx_path.write_text(text, encoding="utf-8")
-    else:
-        print(f"warn: index missing, task file still written: {task_path}", file=sys.stderr)
-
-    print(f"[writeback] created {task_path}")
-    print(f"[writeback] prepended pointer in {idx_path}")
+    m = Memory(args.memory_dir)
+    tags = tuple(t.strip() for t in args.tags.split()) if args.tags else ()
+    p = m.log(version=args.version, summary=args.summary, entry=args.entry, tags=tags, agent=args.agent)
+    print(f"[writeback] created {p}")
+    print(f"[writeback] prepended pointer in {m.p['index']}")
     print("[writeback] fill in the task record, then sync leftover todos into surface todo.",
           file=sys.stderr)
     return 0
 
 
-# --- checkpoint 3: consolidate (append a deep reflection) ---------------------
-
-DEEP_SECTION_ZH = """## {date} {topic}
-
-### 现状审视
-{review}
-
-### 优化方案
-{plan}
-
-### 隐患
-{risk}
-
-### 预期
-{forecast}
-"""
-
-DEEP_SECTION_EN = """## {date} {topic}
-
-### Status review
-{review}
-
-### Better path
-{plan}
-
-### Risks
-{risk}
-
-### Forecast
-{forecast}
-"""
-
-
 def cmd_consolidate(args) -> int:
-    root = Path(args.memory_dir)
-    if not root.is_dir():
-        print(f"error: memory dir not found: {root}", file=sys.stderr)
-        return 2
-    loc = detect_locale(root)
-    p = paths(root, loc)
-    is_en = loc is EN
-
-    today = date.today().isoformat()
-    section = (DEEP_SECTION_EN if is_en else DEEP_SECTION_ZH).format(
-        date=today, topic=args.topic, review=args.review,
-        plan=args.plan, risk=args.risk, forecast=args.forecast,
-    )
-
-    deep = p["deep_file"]
-    if deep.exists():
-        text = deep.read_text(encoding="utf-8").rstrip() + "\n\n" + section
-    else:
-        text = section
-    deep.write_text(text, encoding="utf-8")
-
-    print(f"[consolidate] appended reflection to {deep}")
+    m = Memory(args.memory_dir)
+    p = m.consolidate(topic=args.topic, review=args.review, plan=args.plan,
+                       risk=args.risk, forecast=args.forecast, agent=args.agent)
+    print(f"[consolidate] appended reflection to {p}")
     print(
         "[consolidate] now update surface todo (check off done, add new, reprioritize) "
         "and overview summary if there was real progress.",
@@ -392,26 +99,192 @@ def cmd_consolidate(args) -> int:
     return 0
 
 
-# --- CLI ----------------------------------------------------------------------
+def cmd_validate(args) -> int:
+    v = Memory(args.memory_dir).validate()
+    print(f"ok={v.ok}")
+    if v.violations:
+        print("\n".join(v.violations))
+    return 0 if v.ok else 1
+
+
+def cmd_snapshot(args) -> int:
+    p = snapshot_lib(args.memory_dir, args.output, format=args.format)
+    print(f"[snapshot] wrote {p} ({p.stat().st_size} bytes, format={args.format})")
+    return 0
+
+
+def cmd_init(args) -> int:
+    root = init_lib(args.target_dir, locale=args.locale, with_unknowns=not args.no_unknowns)
+    print(f"[init] scaffolded library at {root}")
+    files = sorted(str(p.relative_to(root)) for p in root.rglob("*") if p.is_file())
+    for f in files:
+        print(f"  {f}")
+    print("[init] fill in 表层/00-项目总览.md (or Surface/00-overview.md), "
+          "then start your first middle-layer task record.",
+          file=sys.stderr)
+    return 0
+
+
+def cmd_sync(args) -> int:
+    """sync <memory_dir> [status|push|pull]"""
+    action = args.sync_action or "status"
+    if action == "status":
+        s = s_status(args.memory_dir)
+        print(sync_report(s))
+    elif action == "push":
+        r = s_push(args.memory_dir, auto_commit=True, message=args.message or "")
+        print(f"[sync] pushed={r.get('pushed')} committed={r.get('committed')} hash={r.get('commit_hash','')}")
+        if r.get("error"):
+            print(f"[sync] error: {r['error']}")
+    elif action == "pull":
+        r = s_pull(args.memory_dir)
+        print(f"[sync] pulled={r.get('pulled')} conflicts={len(r.get('conflicts',[]))}")
+        if r.get("error"):
+            print(f"[sync] error: {r['error']}")
+    return 0
+
+
+def cmd_correct(args) -> int:
+    """correct <memory_dir>"""
+    r = find_stale(args.memory_dir)
+    print(correction_report(r))
+    return 0
+
+
+def cmd_predict(args) -> int:
+    """predict <memory_dir>"""
+    r = track_preds(args.memory_dir)
+    print(pred_report(r))
+    return 0
+
+
+def cmd_transfer(args) -> int:
+    """transfer <target_dir> --sources dir1 dir2 [--context '...']"""
+    sources = args.sources.split() if args.sources else []
+    r = transfer_kn(args.memory_dir, sources, context=args.context or "")
+    print(transfer_report(r))
+    return 0
+
+
+def cmd_meta(args) -> int:
+    """meta <memory_dir>"""
+    r = discover_bs(args.memory_dir)
+    print(blind_spot_report(r))
+    return 0
+
+
+def cmd_quality(args) -> int:
+    """quality <memory_dir>"""
+    r = assess_refl(args.memory_dir)
+    print(quality_report(r))
+    return 0
+
+
+def cmd_consolidate_patterns(args) -> int:
+    """consolidate-patterns <memory_dir> [--min-n 2] [--threshold 0.35]"""
+    r = discover_pats(args.memory_dir, min_n=args.min_n, similarity_threshold=args.threshold)
+    print(pattern_report(r))
+    return 0
+
+
+def cmd_check(args) -> int:
+    """check <memory_dir> --context '...' [--files f1 f2]"""
+    files = args.files.split() if args.files else None
+    r = check_dev(args.memory_dir, context=args.context or "", files=files)
+    print(deviation_report(r))
+    return 0
+
+
+def cmd_activate(args) -> int:
+    """activate <memory_dir> --context '...' [--files f1 f2]"""
+    files = args.files.split() if args.files else None
+    r = activate_lib(args.memory_dir, context=args.context or "", files=files)
+    print(activation_summary(r))
+    return 0
+
+
+def cmd_graph(args) -> int:
+    """graph build|summary|query <memory_dir>"""
+    if args.graph_cmd == "build":
+        g = build_graph_lib(args.memory_dir)
+        stats = g.stats()
+        print(f"[graph] built: {stats['entities']} entities, {stats['relations']} relations")
+        print(f"[graph] entity_types: {stats['entity_types']}")
+        print(f"[graph] relation_types: {stats['relation_types']}")
+        print(f"[graph] saved to {args.memory_dir}/.cognitive-graph/graph.json")
+        return 0
+    elif args.graph_cmd == "summary":
+        g = load_graph_lib(args.memory_dir)
+        if not g:
+            print("[graph] no graph found — run 'graph build' first", file=sys.stderr)
+            return 2
+        print(graph_summary(g))
+        return 0
+    elif args.graph_cmd == "query":
+        g = load_graph_lib(args.memory_dir)
+        if not g:
+            print("[graph] no graph found — run 'graph build' first", file=sys.stderr)
+            return 2
+        if args.entity_type or args.name:
+            ents = query_entities(g, type=args.entity_type, name_contains=args.name)
+            print(f"# entities ({len(ents)})")
+            for e in sorted(ents, key=lambda x: x.get("occurrences",0), reverse=True)[:20]:
+                print(f"  {e['type']}: {e['name']} (x{e['occurrences']})")
+        if args.rel_type:
+            rels = query_relations(g, rel_type=args.rel_type)
+            print(f"# relations ({len(rels)})")
+            for r in rels[:20]:
+                print(f"  {r['source']} -{r['type']}-> {r['target']} [{r.get('date','')}]")
+                if r.get("evidence"):
+                    print(f"    {r['evidence'][:80]}")
+        if args.contradictions:
+            contras = detect_contras(args.memory_dir)
+            print(f"# contradictions / touched predictions ({len(contras)})")
+            for c in contras[:20]:
+                print(f"  [{c['status']}] deep:{c['deep_date']} -> middle:{c['middle_date']} (hits:{c['keyword_hits']})")
+                print(f"    {c['prediction'][:80]}")
+        if args.evolution:
+            evo = query_evolution(g, args.evolution)
+            print(f"# evolution of {args.evolution} ({len(evo)} points)")
+            for point in evo:
+                sfs = ", ".join(point.get("source_files", [])[:3])
+                print(f"  {point['date']}: x{point['occurrences']} files: {sfs}")
+        if args.neighbors:
+            nb = query_neighbors(g, args.neighbors)
+            print(f"# neighbors of {args.neighbors}")
+            print(f"  outgoing: {len(nb['outgoing'])}")
+            for r in nb["outgoing"][:10]:
+                print(f"    -> {r['target']} ({r['type']})")
+            print(f"  incoming: {len(nb['incoming'])}")
+            for r in nb["incoming"][:10]:
+                print(f"    <- {r['source']} ({r['type']})")
+        return 0
+    return 1
+
 
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="memory_adapter",
-        description="Three-Layer Agent Memory reference adapter (see PROTOCOL.md).",
+        description="Three-Layer Agent Memory CLI (see PROTOCOL.md). "
+                    "Thin wrapper over the three_layer_memory library.",
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
 
     pr = sub.add_parser("recall", help="on_session_start: load recall files")
     pr.add_argument("memory_dir")
     pr.add_argument("--tag", help="filter middle-layer records by tag (associative recall, e.g. 鉴权)")
+    pr.add_argument("--budget", type=int, default=4000, help="token budget for the prompt block")
+    pr.add_argument("--recent-n", type=int, default=2, dest="recent_n",
+                     help="number of recent middle-layer records to include")
     pr.set_defaults(func=cmd_recall)
 
     pl = sub.add_parser("log", help="on_milestone: write a middle-layer task record")
     pl.add_argument("memory_dir")
     pl.add_argument("--version", required=True, help="e.g. V5.4.14 or backend")
     pl.add_argument("--summary", required=True, help="short description (filename-safe)")
-    pl.add_argument("--entry", default="<本次工作起点>", help="what triggered this work")
-    pl.add_argument("--tags", default=None, help='tags line, e.g. "#鉴权 #网络"')
+    pl.add_argument("--entry", default="", help="what triggered this work")
+    pl.add_argument("--tags", default=None, help='space-separated tags, e.g. "#鉴权 #网络"')
+    pl.add_argument("--agent", default="unknown", help="name of the agent writing this record (e.g. claude-code, codex)")
     pl.set_defaults(func=cmd_log)
 
     pc = sub.add_parser("consolidate", help="on_day_end: append a deep reflection")
@@ -421,7 +294,99 @@ def main(argv=None) -> int:
     pc.add_argument("--plan", required=True, help="优化方案 / better path")
     pc.add_argument("--risk", required=True, help="隐患 / risks")
     pc.add_argument("--forecast", required=True, help="预期 / forecast")
+    pc.add_argument("--agent", default="unknown", help="name of the agent writing this reflection")
     pc.set_defaults(func=cmd_consolidate)
+
+    pv = sub.add_parser("validate", help="check schema conformance")
+    pv.add_argument("memory_dir")
+    pv.set_defaults(func=cmd_validate)
+
+    ps = sub.add_parser("snapshot", help="render a static HTML/MD snapshot")
+    ps.add_argument("memory_dir")
+    ps.add_argument("output", help="output path (e.g. snapshot.html)")
+    ps.add_argument("--format", choices=["html", "md"], default="html")
+    ps.set_defaults(func=cmd_snapshot)
+
+    pi = sub.add_parser("init", help="scaffold a new project memory from template")
+    pi.add_argument("target_dir")
+    pi.add_argument("--locale", choices=["zh", "en", "auto"], default="auto")
+    pi.add_argument("--no-unknowns", action="store_true",
+                     help="omit the optional 02-未知与开放问题 / 02-unknowns.md")
+    pi.set_defaults(func=cmd_init)
+
+    # sync subcommand
+    psync = sub.add_parser("sync", help="cloud sync: status/push/pull memory library")
+    psync.add_argument("memory_dir")
+    psync.add_argument("sync_action", nargs="?", default="status", choices=["status", "push", "pull"])
+    psync.add_argument("--message", default="", help="commit message for push")
+    psync.set_defaults(func=cmd_sync)
+
+    # correct subcommand
+    pco = sub.add_parser("correct", help="find stale laws and violated constraints for demotion")
+    pco.add_argument("memory_dir")
+    pco.set_defaults(func=cmd_correct)
+
+    # predict subcommand
+    pp = sub.add_parser("predict", help="track deep-layer predictions: confirmed/falsified/unverified")
+    pp.add_argument("memory_dir")
+    pp.set_defaults(func=cmd_predict)
+
+    # transfer subcommand
+    ptr = sub.add_parser("transfer", help="cross-project knowledge transfer")
+    ptr.add_argument("memory_dir", help="target project dir")
+    ptr.add_argument("--sources", default=None, help="space-separated source project dirs")
+    ptr.add_argument("--context", default="", help="what you're about to do")
+    ptr.set_defaults(func=cmd_transfer)
+
+    # meta subcommand
+    pm = sub.add_parser("meta", help="meta-meta-cognition: discover reflection blind spots")
+    pm.add_argument("memory_dir")
+    pm.set_defaults(func=cmd_meta)
+
+    # quality subcommand
+    pq = sub.add_parser("quality", help="assess deep-layer reflection quality (detect degradation)")
+    pq.add_argument("memory_dir")
+    pq.set_defaults(func=cmd_quality)
+
+    # consolidate-patterns subcommand
+    pcp = sub.add_parser("consolidate-patterns", help="auto-discover recurring patterns (N>=2) from task records")
+    pcp.add_argument("memory_dir")
+    pcp.add_argument("--min-n", type=int, default=2, dest="min_n", help="minimum recurrence count")
+    pcp.add_argument("--threshold", type=float, default=0.35, help="similarity threshold for clustering")
+    pcp.set_defaults(func=cmd_consolidate_patterns)
+
+    # check subcommand
+    pck = sub.add_parser("check", help="check if current work deviates from project constraints")
+    pck.add_argument("memory_dir")
+    pck.add_argument("--context", default="", help="what the agent is about to do")
+    pck.add_argument("--files", default=None, help="space-separated file names")
+    pck.set_defaults(func=cmd_check)
+
+    # activate subcommand
+    pa = sub.add_parser("activate", help="auto-activate relevant memories from cognitive graph")
+    pa.add_argument("memory_dir")
+    pa.add_argument("--context", default="", help="what the agent is about to do (natural language)")
+    pa.add_argument("--files", default=None, help="space-separated file names the agent will touch")
+    pa.set_defaults(func=cmd_activate)
+
+    # graph subcommands
+    pg = sub.add_parser("graph", help="cognitive graph: build/query the entity-relation graph")
+    pg_sub = pg.add_subparsers(dest="graph_cmd", required=True)
+    pg_build = pg_sub.add_parser("build", help="build graph from Markdown memory files")
+    pg_build.add_argument("memory_dir")
+    pg_build.set_defaults(func=cmd_graph)
+    pg_sum = pg_sub.add_parser("summary", help="print graph summary")
+    pg_sum.add_argument("memory_dir")
+    pg_sum.set_defaults(func=cmd_graph)
+    pg_q = pg_sub.add_parser("query", help="query entities/relations/neighbors")
+    pg_q.add_argument("memory_dir")
+    pg_q.add_argument("--type", dest="entity_type", default=None, help="entity type filter (file_ref/version/endpoint/law_ref/decision)")
+    pg_q.add_argument("--name", default=None, help="entity name contains filter")
+    pg_q.add_argument("--rel", dest="rel_type", default=None, help="relation type filter (caused/migrated/applies/references)")
+    pg_q.add_argument("--neighbors", default=None, help="entity id to find neighbors for")
+    pg_q.add_argument("--contradictions", action="store_true", help="detect deep-layer predictions touched by recent middle-layer records")
+    pg_q.add_argument("--evolution", default=None, help="entity id to trace evolution timeline")
+    pg_q.set_defaults(func=cmd_graph)
 
     args = ap.parse_args(argv)
     return args.func(args)

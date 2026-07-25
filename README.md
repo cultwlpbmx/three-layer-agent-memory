@@ -59,8 +59,8 @@
 ## 协议（agent 必须遵守的 3 个检查点）
 
 1. **开机 / 任务开始** → recall：读表层总览 → 待办 → 未知与开放问题（若有）→ 中层最近 1–2 条 → 深层末尾 → 全局深层末尾（若配置）。
-2. **阶段任务完成** → writeback：在中层新建一篇任务记录（含 tags 行），并在 INDEX 置顶插指针。
-3. **每天结束 / 重大节点** → consolidate：更新表层待办与摘要，**从中层提炼重复模式为经验法则**，在深层**追加**一段反思（现状审视/优化方案/隐患/预期）。若法则跨项目通用，同时写入全局深层。
+2. **阶段任务完成** → writeback：在中层新建一篇任务记录（含 **agent 签名** + tags 行），并在 INDEX 置顶插指针。
+3. **每天结束 / 重大节点** → consolidate：更新表层待办与摘要，**从中层提炼重复模式为经验法则**，在深层**追加**一段反思（含 agent 签名 + 现状审视/优化方案/隐患/预期）。若法则跨项目通用，同时写入全局深层。
 
 详见 [`PROTOCOL.md`](PROTOCOL.md)。
 
@@ -81,8 +81,10 @@
 | [`INTEGRATION.md`](INTEGRATION.md) | 集成：hook 契约 + 全局深层库 + 跨项目聚合 + 推送鉴权 |
 | [`_template/`](_template/) | 模板套件（中文，canonical）：含表层/中层/深层 + 未知与开放问题 + archive |
 | [`_template-en/](_template-en/) | 模板套件（英文，Surface/Middle/Deep + 02-unknowns） |
-| [`examples/memory_adapter.py`](examples/memory_adapter.py) | 可运行参考实现：recall/log/consolidate + `--tag` 联想回溯 + 全局深层 |
-| [`examples/aggregate.py`](examples/aggregate.py) | 跨项目深层聚合：只读报告，按时间线/隐患/跨项目重复主题聚类 |
+| [`three_layer_memory/`](three_layer_memory/) | **v0.5 Python library**：importable `Memory`/`recall`/`log`/`consolidate`/`init`/`snapshot`/`validate`，零依赖，`log`/`consolidate` 含 `agent` 签名参数 |
+| [`examples/memory_adapter.py`](examples/memory_adapter.py) | CLI（5 分钟读懂的范式门面）：薄包装库，含 `recall --tag` 联想回溯 |
+| [`examples/mcp_server.py`](examples/mcp_server.py) | **v0.5 MCP server**：7 个 tool，任何 MCP client 零代码接入，跨 agent 共享同一份记忆，含 agent 签名 |
+| [`examples/aggregate.py`](examples/aggregate.py) | 跨项目深层聚合 CLI：只读报告，按时间线/隐患/跨项目重复主题聚类 |
 | [`scripts/secret-scan.sh`](scripts/secret-scan.sh) | 推送前密钥扫描（防止把真实密钥推公开） |
 | [`.github/workflows/secret-scan.yml`](.github/workflows/secret-scan.yml) | 可选 CI：每次 push/PR 自动跑密钥扫描 |
 | [`case-study.md`](case-study.md) | 脱敏案例：长任务线中三层记忆如何防止上下文漂移 |
@@ -105,16 +107,95 @@
 
 ## 快速开始
 
+### 方式 A：Python library（一行接入任何 Python agent）
+
 ```bash
 git clone https://github.com/cultwlpbmx/three-layer-agent-memory.git
-cp -r three-layer-agent-memory/_template /path/to/your-project-memory   # 或 _template-en
-# 重命名目录为项目名，填写 表层/00-项目总览.md，开始记第一篇中层任务
-# （可选）填写 表层/02-未知与开放问题.md，记录认知缺口
-# （可选）配置 ~/.agent-memory/global-deep/ 实现跨项目记忆
-# 推送前：./scripts/secret-scan.sh   # 确认没把真实密钥写进库
+cd three-layer-agent-memory
+pip install -e .            # 零运行时依赖
 ```
 
-让你的 agent 读 `PROTOCOL.md` 并遵守三个检查点即可。要省事就接上 `examples/memory_adapter.py`（recall/log/consolidate + `--tag` 联想回溯 + 全局深层）。跨项目聚合用 `examples/aggregate.py`。无需任何运行时依赖（仅用 Python 标准库）。
+```python
+from three_layer_memory import Memory, init, snapshot
+
+# 一键建库（从模板脚手架）
+init("/path/to/my-project-memory", locale="zh")
+
+# agent 上来一行拿到三问答案 + 完整上下文
+m = Memory("/path/to/my-project-memory")
+r = m.recall()                      # on_session_start → {overview, todo, unknowns, recent_middle, last_deep, ...}
+print(r.as_prompt_block())           # 注入模型 context
+
+# 阶段完成记中层（文件名唯一，多 agent 并发零碰撞）
+m.log(version="V0.1", summary="first task", tags=("#auth", "#deploy"))
+
+# 天结束追加深层反思（append-only，原子追加）
+m.consolidate(topic="kickoff", review="...", plan="...", risk="...", forecast="...", agent="claude-code")
+
+# 校验 + 可视化快照
+print(m.validate())                 # schema 校验
+snapshot("/path/to/...", "out.html")  # 单页 HTML，浏览器直开
+```
+
+三个基本问题（这项目是什么 / 走到哪 / 下一步）已由 `recall()` 的 `overview` + `todo` + `last_deep` 回答——不需要单独的 brief。
+
+### 方式 B：MCP server（跨 agent + 跨模型共享同一份记忆）
+
+```bash
+pip install -e ".[mcp]"            # 装 mcp 可选依赖
+python examples/mcp_server.py       # stdio MCP server
+```
+
+任何 MCP client（Claude Desktop / Cursor / Codex / Windsurf / Cline）在 MCP 配置加一行就接上：
+
+```json
+{
+  "mcpServers": {
+    "three-layer-agent-memory": {
+      "command": "python",
+      "args": ["<path-to-repo>/examples/mcp_server.py"]
+    }
+  }
+}
+```
+
+7 个 tool：`three_layer_recall` / `_log` / `_consolidate` / `_snapshot` / `_init` / `_validate` / `_aggregate`。
+**agent 和模型都是过客，记忆是常驻**——切 agent 不丢记忆，这是 Mem0/Letta（per-agent runtime）结构上做不了的事。
+
+### 方式 C：CLI（5 分钟能读懂的范式门面）
+
+```bash
+python examples/memory_adapter.py init /path/to/my-project-memory --locale zh
+python examples/memory_adapter.py recall /path/to/my-project-memory --budget 2000
+python examples/memory_adapter.py log /path/to/my-project-memory --version V0.1 --summary "first task" --tags "#auth #deploy"
+python examples/memory_adapter.py consolidate /path/to/my-project-memory --topic "..." --review "..." --plan "..." --risk "..." --forecast "..."
+python examples/memory_adapter.py validate /path/to/my-project-memory
+python examples/memory_adapter.py snapshot /path/to/my-project-memory out.html
+```
+
+### 并发写入协调（结构本身已解决）
+
+多 agent 同时写记忆库不用锁——靠设计消解：
+- 中层任务记录唯一命名（date+version+summary）→ 多 agent 并发写零碰撞
+- 深层 append-only → 原子追加安全
+- 表层 todo by design 只由 consolidate 单写者改（agent 在中层提议，consolidate 合并）
+- recall 读最近 INDEX = 隐式协调（agent 知道别人刚做了什么）
+
+可选 `Memory.claim()` 锁是 escape hatch，v0.5 是 stub，等真实并发冲突了 v0.6 再实现。
+
+### 配置全局深层（跨项目记忆）
+
+```bash
+mkdir -p ~/.agent-memory/global-deep
+echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
+# recall 会自动读末尾一节，consolidate 可写跨项目法则
+```
+
+### 推送前密钥扫描
+
+```bash
+./scripts/secret-scan.sh   # 确认没把真实密钥写进库
+```
 
 ## 许可
 

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "three-layer-agent-memory"
+version = "0.7.0"
+description = "A filesystem-native, version-controllable long-memory paradigm for AI agents. Surface/Middle/Deep layers + recall/writeback/consolidate protocol. Pure Markdown, zero infra, drives agent self-evolution."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.9"
+authors = [{ name = "cultwlpbmx" }]
+keywords = ["agent-memory", "ai-agent", "claude-code", "cognitive-architecture", "long-context", "memory", "self-improvement"]
+classifiers = [
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+# Core has zero runtime dependencies — the paradigm's selling point.
+# MCP server and snapshot are opt-in via extras.
+dependencies = []
+
+[project.optional-dependencies]
+# MCP server (examples/mcp_server.py) — for cross-agent integration
+mcp = ["mcp>=1.0"]
+
+[project.urls]
+Homepage = "https://github.com/cultwlpbmx/three-layer-agent-memory"
+
+[tool.setuptools]
+# Ship the templates and adapters alongside the package so init() can scaffold
+# and the repo stays self-contained.
+include-package-data = true
+
+[tool.setuptools.packages.find]
+include = ["three_layer_memory*"]
