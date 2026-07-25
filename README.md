@@ -1,6 +1,8 @@
 # Three-Layer Agent Memory
 
 > A filesystem-native, version-controllable **long-memory paradigm for AI agents**.
+>
+> [中文](README.md) | [English](README_EN.md)
 > 让智能体在长任务线里**不丢初心、不稀释记忆、能自我进化**。
 >
 > English abstract below · 正文以中文为主（与作者实际使用环境一致）。
@@ -199,7 +201,7 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 
 ## 许可
 
-MIT — 见 [`LICENSE`](LICENSE)。拿去用、改、卖，都行。如果你用它建了自己的 agent 记忆库，欢迎开 issue 留个链接。
+MIT — 见 [`LICENSE`](LICENSE)。如果你用它建了自己的 agent 记忆库，欢迎开 issue 留个链接。
 
 ## 来源
 
