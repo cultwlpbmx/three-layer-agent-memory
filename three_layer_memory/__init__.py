@@ -67,6 +67,7 @@ from .cross_project import transfer_knowledge, transfer_report
 from .prediction_tracker import track_predictions, prediction_report
 from .self_correction import find_stale_laws, correction_report
 from .cloud_sync import sync_status, sync_push, sync_pull, sync_report
+from .oss_sync import OSSSync, oss_sync_report
 from .checkpoint import (
     create_checkpoint,
     heartbeat,
@@ -128,5 +129,7 @@ __all__ = [
     "sync_push",
     "sync_pull",
     "sync_report",
+    "OSSSync",
+    "oss_sync_report",
     "__version__",
 ]

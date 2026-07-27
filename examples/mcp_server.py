@@ -62,6 +62,7 @@ from three_layer_memory.cross_project import transfer_knowledge as transfer_kn, 
 from three_layer_memory.prediction_tracker import track_predictions as track_preds, prediction_report as pred_report
 from three_layer_memory.self_correction import find_stale_laws as find_stale, correction_report
 from three_layer_memory.cloud_sync import sync_status as s_status, sync_push as s_push, sync_pull as s_pull, sync_report
+from three_layer_memory.oss_sync import OSSSync, oss_sync_report
 
 
 mcp = FastMCP("three-layer-agent-memory")
@@ -479,6 +480,50 @@ def three_layer_sync(project_dir: str, action: str = "status",
     elif action == "pull":
         r = s_pull(project_dir)
         return r
+    else:
+        return {"error": f"unknown action: {action}"}
+
+
+@mcp.tool()
+def three_layer_oss_sync(action: str, memory_dir: str,
+                           bucket: str = "agent-memory-sync",
+                           prefix: str = "",
+                           endpoint: str = "oss-cn-hangzhou",
+                           access_key_id: str = "",
+                           access_key_secret: str = "",
+                           clean: bool = False) -> dict:
+    """Cloud sync memory library to Alibaba Cloud OSS.
+
+    `action`: "push" (upload local to OSS), "pull" (download OSS to local),
+              "status" (show diff), "list" (list remote files).
+
+    Uses incremental sync — only changed files transfer (by MD5 hash).
+    Deep layer is append-only and never conflicts. Checkpoint files can also
+    sync for cross-device task resume.
+    """
+    if not access_key_id or not access_key_secret:
+        return {"error": "access_key_id and access_key_secret required"}
+
+    pf = prefix or os.path.basename(memory_dir.rstrip("/")) + "/"
+    syncer = OSSSync(
+        bucket_name=bucket,
+        access_key_id=access_key_id,
+        access_key_secret=access_key_secret,
+        endpoint=endpoint,
+        prefix=pf,
+    )
+
+    if action == "push":
+        r = syncer.push(memory_dir, delete_remote_orphans=clean)
+        return r
+    elif action == "pull":
+        r = syncer.pull(memory_dir)
+        return r
+    elif action == "status":
+        d = syncer.diff(memory_dir)
+        return d
+    elif action == "list":
+        return {"files": syncer.list_remote()}
     else:
         return {"error": f"unknown action: {action}"}
 

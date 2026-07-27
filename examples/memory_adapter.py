@@ -51,6 +51,7 @@ from three_layer_memory.cross_project import transfer_knowledge as transfer_kn, 
 from three_layer_memory.prediction_tracker import track_predictions as track_preds, prediction_report as pred_report
 from three_layer_memory.self_correction import find_stale_laws as find_stale, correction_report
 from three_layer_memory.cloud_sync import sync_status as s_status, sync_push as s_push, sync_pull as s_pull, sync_report
+from three_layer_memory.oss_sync import OSSSync, oss_sync_report
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -122,6 +123,59 @@ def cmd_init(args) -> int:
     print("[init] fill in 表层/00-项目总览.md (or Surface/00-overview.md), "
           "then start your first middle-layer task record.",
           file=sys.stderr)
+    return 0
+
+
+def cmd_oss_sync(args) -> int:
+    """oss-sync <action> <memory_dir> [--bucket name] [--prefix p] [--key-file path]"""
+    # Read AccessKey from file
+    key_file = args.key_file or r"C:\Users\cultw\Desktop\AccessKey.csv"
+    if not os.path.exists(key_file):
+        print(f"[oss-sync] key file not found: {key_file}", file=sys.stderr)
+        return 2
+    with open(key_file, "r", encoding="gbk") as f:
+        lines = f.readlines()
+    parts = lines[1].strip().split(",")
+    ak_id = parts[0].strip().strip('"')
+    ak_secret = parts[1].strip().strip('"')
+
+    # Determine prefix from memory dir name if not specified
+    prefix = args.prefix or os.path.basename(args.memory_dir.rstrip("/\\")) + "/"
+
+    syncer = OSSSync(
+        bucket_name=args.bucket or "agent-memory-sync",
+        access_key_id=ak_id,
+        access_key_secret=ak_secret,
+        endpoint=args.endpoint or "oss-cn-hangzhou",
+        prefix=prefix,
+    )
+
+    action = args.oss_action
+    if action == "push":
+        r = syncer.push(args.memory_dir, delete_remote_orphans=args.clean)
+        print(oss_sync_report(r, "push"))
+    elif action == "pull":
+        r = syncer.pull(args.memory_dir, overwrite=not args.no_overwrite)
+        print(oss_sync_report(r, "pull"))
+    elif action == "status" or action == "diff":
+        d = syncer.diff(args.memory_dir)
+        print(f"# OSS Diff — {args.memory_dir}")
+        print(f"  to_upload: {len(d['to_upload'])}")
+        print(f"  to_download: {len(d['to_download'])}")
+        print(f"  identical: {len(d['identical'])}")
+        if d["to_upload"]:
+            print("  Files to upload:")
+            for k in d["to_upload"][:5]:
+                print(f"    + {k}")
+        if d["to_download"]:
+            print("  Files to download:")
+            for k in d["to_download"][:5]:
+                print(f"    ↓ {k}")
+    elif action == "list":
+        remote = syncer.list_remote()
+        print(f"# OSS Remote — {len(remote)} files")
+        for k in list(remote.keys())[:15]:
+            print(f"  {k}")
     return 0
 
 
@@ -313,6 +367,18 @@ def main(argv=None) -> int:
     pi.add_argument("--no-unknowns", action="store_true",
                      help="omit the optional 02-未知与开放问题 / 02-unknowns.md")
     pi.set_defaults(func=cmd_init)
+
+    # oss-sync subcommand
+    pos = sub.add_parser("oss-sync", help="OSS cloud sync: push/pull/status/list memory library")
+    pos.add_argument("oss_action", choices=["push", "pull", "status", "diff", "list"])
+    pos.add_argument("memory_dir")
+    pos.add_argument("--bucket", default=None, help="OSS bucket name (default: agent-memory-sync)")
+    pos.add_argument("--prefix", default=None, help="OSS path prefix (default: memory dir name)")
+    pos.add_argument("--endpoint", default=None, help="OSS endpoint (default: oss-cn-hangzhou)")
+    pos.add_argument("--key-file", default=None, help="AccessKey CSV file path")
+    pos.add_argument("--clean", action="store_true", help="delete remote orphans during push")
+    pos.add_argument("--no-overwrite", action="store_true", help="skip existing local files during pull")
+    pos.set_defaults(func=cmd_oss_sync)
 
     # sync subcommand
     psync = sub.add_parser("sync", help="cloud sync: status/push/pull memory library")
