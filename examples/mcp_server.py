@@ -63,6 +63,8 @@ from three_layer_memory.prediction_tracker import track_predictions as track_pre
 from three_layer_memory.self_correction import find_stale_laws as find_stale, correction_report
 from three_layer_memory.cloud_sync import sync_status as s_status, sync_push as s_push, sync_pull as s_pull, sync_report
 from three_layer_memory.oss_sync import OSSSync, oss_sync_report
+from three_layer_memory.auto_sync import AutoSync
+from three_layer_memory.sync_coordinator import SyncCoordinator
 
 
 mcp = FastMCP("three-layer-agent-memory")
@@ -526,6 +528,35 @@ def three_layer_oss_sync(action: str, memory_dir: str,
         return {"files": syncer.list_remote()}
     else:
         return {"error": f"unknown action: {action}"}
+
+
+@mcp.tool()
+def three_layer_auto_sync(project_dir: str, action: str = "status",
+                            access_key_id: str = "", access_key_secret: str = "",
+                            device_id: str = "unknown") -> dict:
+    """Transparent auto-sync for agent memory operations.
+
+    Wraps Memory so that recall auto-pulls from OSS and log/consolidate
+    auto-push. The agent calls recall/log/consolidate as normal — sync
+    happens transparently in the background.
+
+    `action`: "status" (check version), "push" (force push), "pull" (force pull).
+    `device_id`: identifies this device for multi-device version tracking.
+    """
+    from three_layer_memory import Memory as Mem
+    m = AutoSync(
+        Mem(project_dir),
+        bucket="agent-memory-sync",
+        access_key_id=access_key_id,
+        access_key_secret=access_key_secret,
+        device_id=device_id,
+    )
+    if action == "status":
+        return m.sync_status()
+    elif action == "push":
+        return m.force_push()
+    elif action == "pull":
+        return m.force_pull()
 
 
 if __name__ == "__main__":

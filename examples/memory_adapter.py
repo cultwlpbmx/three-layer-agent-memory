@@ -26,6 +26,7 @@ Exit codes: 0 success, 1 bad usage, 2 missing memory dir / files.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -52,6 +53,8 @@ from three_layer_memory.prediction_tracker import track_predictions as track_pre
 from three_layer_memory.self_correction import find_stale_laws as find_stale, correction_report
 from three_layer_memory.cloud_sync import sync_status as s_status, sync_push as s_push, sync_pull as s_pull, sync_report
 from three_layer_memory.oss_sync import OSSSync, oss_sync_report
+from three_layer_memory.auto_sync import AutoSync
+from three_layer_memory.sync_coordinator import SyncCoordinator
 
 for _stream in (sys.stdout, sys.stderr):
     try:
@@ -123,6 +126,76 @@ def cmd_init(args) -> int:
     print("[init] fill in 表层/00-项目总览.md (or Surface/00-overview.md), "
           "then start your first middle-layer task record.",
           file=sys.stderr)
+    return 0
+
+
+def cmd_auto_sync(args) -> int:
+    """auto-sync <memory_dir> [--device id] [--action status|push|pull]"""
+    # Read AccessKey
+    key_file = args.key_file or r"C:\Users\cultw\Desktop\AccessKey.csv"
+    if not os.path.exists(key_file):
+        print(f"[auto-sync] key file not found: {key_file}", file=sys.stderr)
+        return 2
+    with open(key_file, "r", encoding="gbk") as f:
+        lines = f.readlines()
+    parts = lines[1].strip().split(",")
+    ak_id = parts[0].strip().strip('"')
+    ak_secret = parts[1].strip().strip('"')
+
+    from three_layer_memory import Memory as Mem
+    m = AutoSync(
+        Mem(args.memory_dir),
+        bucket=args.bucket or "agent-memory-sync",
+        access_key_id=ak_id,
+        access_key_secret=ak_secret,
+        endpoint=args.endpoint or "oss-cn-hangzhou",
+        device_id=args.device or "local",
+    )
+    action = args.auto_action or "status"
+    if action == "status":
+        s = m.sync_status()
+        print(f"[auto-sync] local=v{s['local_version']} remote=v{s['remote_version']}")
+        print(f"  needs_pull={s['needs_pull']} needs_push={s['needs_push']} conflict={s['conflict']}")
+    elif action == "push":
+        r = m.force_push()
+        print(f"[auto-sync] pushed: {len(r.get('uploaded',[]))} uploaded, {len(r.get('skipped',[]))} skipped")
+    elif action == "pull":
+        r = m.force_pull()
+        print(f"[auto-sync] pulled: {len(r.get('downloaded',[]))} downloaded")
+    return 0
+
+
+def cmd_sync_all(args) -> int:
+    """sync-all <code_repo> <memory_dirs...> [--device id] [--direction push|pull]"""
+    key_file = args.key_file or r"C:\Users\cultw\Desktop\AccessKey.csv"
+    if not os.path.exists(key_file):
+        print(f"[sync-all] key file not found: {key_file}", file=sys.stderr)
+        return 2
+    with open(key_file, "r", encoding="gbk") as f:
+        lines = f.readlines()
+    parts = lines[1].strip().split(",")
+    ak_id = parts[0].strip().strip('"')
+    ak_secret = parts[1].strip().strip('"')
+
+    coord = SyncCoordinator(
+        code_repo=args.code_repo,
+        memory_libraries=args.memory_dirs,
+        bucket=args.bucket or "agent-memory-sync",
+        access_key_id=ak_id,
+        access_key_secret=ak_secret,
+        endpoint=args.endpoint or "oss-cn-hangzhou",
+        device_id=args.device or "local",
+    )
+    if args.direction == "status":
+        s = coord.status_all()
+        print(coord.report(s))
+    else:
+        r = coord.sync_all(direction=args.direction)
+        print(f"[sync-all] direction={r['direction']}")
+        gh = r.get("github", {})
+        print(f"  GitHub: pushed={gh.get('pushed',False)} committed={gh.get('committed',False)}")
+        for lib_name, info in r.get("oss", {}).items():
+            print(f"  OSS/{lib_name}: {info}")
     return 0
 
 
@@ -367,6 +440,27 @@ def main(argv=None) -> int:
     pi.add_argument("--no-unknowns", action="store_true",
                      help="omit the optional 02-未知与开放问题 / 02-unknowns.md")
     pi.set_defaults(func=cmd_init)
+
+    # auto-sync subcommand
+    pas = sub.add_parser("auto-sync", help="transparent auto-sync: recall auto-pulls, log auto-pushes")
+    pas.add_argument("memory_dir")
+    pas.add_argument("auto_action", nargs="?", default="status", choices=["status", "push", "pull"])
+    pas.add_argument("--device", default=None, help="device ID for version tracking")
+    pas.add_argument("--bucket", default=None)
+    pas.add_argument("--endpoint", default=None)
+    pas.add_argument("--key-file", default=None)
+    pas.set_defaults(func=cmd_auto_sync)
+
+    # sync-all subcommand
+    psa = sub.add_parser("sync-all", help="coordinate GitHub + OSS one-command sync")
+    psa.add_argument("code_repo", help="code repository path (git)")
+    psa.add_argument("memory_dirs", nargs="+", help="memory library directories")
+    psa.add_argument("--direction", default="push", choices=["push", "pull", "status"])
+    psa.add_argument("--device", default=None)
+    psa.add_argument("--bucket", default=None)
+    psa.add_argument("--endpoint", default=None)
+    psa.add_argument("--key-file", default=None)
+    psa.set_defaults(func=cmd_sync_all)
 
     # oss-sync subcommand
     pos = sub.add_parser("oss-sync", help="OSS cloud sync: push/pull/status/list memory library")
