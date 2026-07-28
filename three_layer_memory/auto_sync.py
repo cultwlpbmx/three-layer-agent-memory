@@ -111,13 +111,28 @@ class AutoSync:
         device_id: str = "unknown",
         auto_pull: bool = True,
         auto_push: bool = True,
+        api_key: str = "",
+        cloud_server: str = "http://47.94.246.86:8088",
     ):
         self.memory = memory
         self.device_id = device_id
         self.auto_pull = auto_pull
         self.auto_push = auto_push
+        self.api_key = api_key
+        self.cloud_server = cloud_server
+        self._user_info = None
 
-        if access_key_id and access_key_secret:
+        if api_key:
+            self._user_info = self._verify_api_key()
+            if self._user_info and access_key_id and access_key_secret:
+                user_id = self._user_info["user_id"]
+                prefix = f"users/user_{user_id:04d}/{memory.root.name}/"
+                self.syncer = OSSSync(bucket_name=bucket, access_key_id=access_key_id, access_key_secret=access_key_secret, endpoint=endpoint, prefix=prefix)
+                self.version = SyncVersion(memory.root, device_id)
+            else:
+                self.syncer = None
+                self.version = SyncVersion(memory.root, device_id) if self._user_info else None
+        elif access_key_id and access_key_secret:
             project_name = memory.root.name
             self.syncer = OSSSync(
                 bucket_name=bucket,
@@ -131,11 +146,39 @@ class AutoSync:
             self.syncer = None
             self.version = None
 
+    def _verify_api_key(self):
+        try:
+            import urllib.request, json as _json
+            url = f"{self.cloud_server}/api/auth/verify?api_key={self.api_key}"
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                return _json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return None
+
+    def _cloud_sync(self, direction):
+        if not self.api_key or not self._user_info:
+            return {"error": "no api_key"}
+        try:
+            import urllib.request, json as _json
+            url = f"{self.cloud_server}/api/user/project/{self.memory.root.name}/sync/{direction}?api_key={self.api_key}"
+            req = urllib.request.Request(url, method="POST")
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                return _json.loads(resp.read().decode("utf-8"))
+        except Exception as e:
+            return {"error": str(e)}
+
     def _maybe_pull(self):
         """Pull from OSS if remote version > local."""
-        if not self.syncer or not self.auto_pull:
+        if not self.auto_pull:
             return
-        local_v = self.version.read_local()
+        if self.syncer:
+            local_v = self.version.read_local()
+            remote_v = self.version.read_remote(self.syncer)
+            if remote_v.get("version", 0) > local_v.get("version", 0):
+                self.syncer.pull(self.memory.root)
+        elif self.api_key:
+            self._cloud_sync("pull")
+        return
         remote_v = self.version.read_remote(self.syncer)
         if remote_v.get("version", 0) > local_v.get("version", 0):
             self.syncer.pull(self.memory.root)
