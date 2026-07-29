@@ -196,6 +196,46 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 ./scripts/secret-scan.sh   # confirm no real secrets in the library
 ```
 
+## Commercial
+
+Cloud services for cross-device and cross-agent memory sharing:
+
+| Feature | Free | Pro $9/mo | Team $39/mo |
+|---|---|---|---|
+| Local library + CLI | \u2705 | \u2705 | \u2705 |
+| GitHub code repo | \u2705 | \u2705 | \u2705 |
+| OSS cloud sync | \u274c | \u2705 | \u2705 |
+| Auto-sync (agent-transparent) | \u274c | \u2705 | \u2705 |
+| Web console | \u274c | \u2705 | \u2705 |
+| MCP server | local | \u2705 | \u2705 |
+| Multi-user collaboration | \u274c | \u274c | \u2705 |
+| Cross-project transfer | \u274c | \u274c | \u2705 |
+| Meta-cognition + prediction | \u274c | \u274c | \u2705 |
+| Projects | 1 | 5 | unlimited |
+| Storage | - | 1GB | 10GB |
+
+**Usage:**
+
+```python
+from three_layer_memory import Memory
+from three_layer_memory.auto_sync import AutoSync
+
+# Free user (local)
+m = Memory("/path/to/project-memory")
+r = m.recall()
+
+# Pro user (cloud sync)
+m = AutoSync(Memory("/path/to/project"),
+    api_key="tlam_sk_xxxx",
+    device_id="my-laptop")
+r = m.recall()    # auto pull
+m.log(...)        # auto push
+```
+
+**Console**: [wlpworld.com](http://wlpworld.com) (ICP filing pending)
+
+**Core philosophy**: Memory is cognition, cognition is memory. We sell not storage, but cognitive assets — making cognition persist across devices and agents.
+
 ## License
 
 MIT — see [`LICENSE`](LICENSE). If you built your own agent memory library with this, feel free to open an issue and share the link.

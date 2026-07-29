@@ -199,6 +199,46 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 ./scripts/secret-scan.sh   # 确认没把真实密钥写进库
 ```
 
+## 商业化
+
+本项目提供云端服务，让 AI agent 跨设备、跨 agent 共享记忆：
+
+| 功能 | 免费 | Pro ¥39/月 | Team ¥199/月 |
+|---|---|---|---|
+| 本地库 + CLI | ✅ | ✅ | ✅ |
+| GitHub 代码仓库 | ✅ | ✅ | ✅ |
+| OSS 云端同步 | ❌ | ✅ | ✅ |
+| 自动同步（agent 无感知） | ❌ | ✅ | ✅ |
+| Web 控制台 | ❌ | ✅ | ✅ |
+| MCP server | 本地 | ✅ | ✅ |
+| 多用户协作 | ❌ | ❌ | ✅ |
+| 跨项目知识迁移 | ❌ | ❌ | ✅ |
+| 元元认知 + 预测验证 | ❌ | ❌ | ✅ |
+| 项目数 | 1 | 5 | 无限 |
+| 存储空间 | - | 1GB | 10GB |
+
+**使用方式**：
+
+```python
+from three_layer_memory import Memory
+from three_layer_memory.auto_sync import AutoSync
+
+# 免费用户（本地）
+m = Memory("/path/to/project-memory")
+r = m.recall()
+
+# Pro 用户（云端同步）
+m = AutoSync(Memory("/path/to/project"),
+    api_key="tlam_sk_xxxx",
+    device_id="my-laptop")
+r = m.recall()    # 自动 pull
+m.log(...)        # 自动 push
+```
+
+**控制台**：[wlpworld.com](http://wlpworld.com) （备案中，临时访问 `http://47.94.246.86:8088`）
+
+**核心哲学**：记忆即是认知，认知即是记忆。我们卖的不是存储，是认知资产——让认知跨设备/跨 agent 持久化。
+
 ## 许可
 
 MIT — 见 [`LICENSE`](LICENSE)。如果你用它建了自己的 agent 记忆库，欢迎开 issue 留个链接。
