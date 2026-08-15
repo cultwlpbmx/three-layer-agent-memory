@@ -112,9 +112,14 @@
 ### 方式 A：Python library（一行接入任何 Python agent）
 
 ```bash
-git clone https://github.com/cultwlpbmx/three-layer-agent-memory.git
-cd three-layer-agent-memory
-pip install -e .            # 零运行时依赖
+pip install three-layer-agent-memory   # 已发布 PyPI（wheel+sdist，含 CLI 与模板）
+# 或从源码：git clone ... && cd three-layer-agent-memory && pip install -e .
+```
+
+```bash
+# 包自带 CLI（pip 安装后即可用）
+python -m three_layer_memory init /path/to/project-memory    # 建库
+python -m three_layer_memory recall /path/to/project-memory  # 开机读记忆
 ```
 
 ```python

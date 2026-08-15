@@ -109,9 +109,14 @@ This paradigm is not good at:
 ### Option A: Python library (one-line integration for any Python agent)
 
 ```bash
-git clone https://github.com/cultwlpbmx/three-layer-agent-memory.git
-cd three-layer-agent-memory
-pip install -e .            # zero runtime dependencies
+pip install three-layer-agent-memory   # live on PyPI (wheel+sdist, CLI + templates included)
+# or from source: git clone ... && cd three-layer-agent-memory && pip install -e .
+```
+
+```bash
+# Bundled CLI (works right after pip install)
+python -m three_layer_memory init /path/to/project-memory    # scaffold
+python -m three_layer_memory recall /path/to/project-memory  # boot-time recall
 ```
 
 ```python
