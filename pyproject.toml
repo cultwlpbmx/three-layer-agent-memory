@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "three-layer-agent-memory"
-version = "0.8.3"
+version = "0.8.4"
 description = "A filesystem-native, version-controllable long-memory paradigm for AI agents. Surface/Middle/Deep layers + recall/writeback/consolidate protocol. Pure Markdown, zero infra, drives agent self-evolution."
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -30,9 +30,12 @@ mcp = ["mcp>=1.0"]
 Homepage = "https://github.com/cultwlpbmx/three-layer-agent-memory"
 
 [tool.setuptools]
-# Ship the templates and adapters alongside the package so init() can scaffold
-# and the repo stays self-contained.
+# Ship the templates inside the package so init() scaffolds for pip installs
+# too (v0.8.4) — _template/ at repo root stays canonical for checkouts.
 include-package-data = true
+
+[tool.setuptools.package-data]
+three_layer_memory = ["_template/**/*", "_template-en/**/*"]
 
 [tool.setuptools.packages.find]
 include = ["three_layer_memory*"]

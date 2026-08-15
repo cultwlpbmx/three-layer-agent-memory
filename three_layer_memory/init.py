@@ -14,18 +14,25 @@ from .core import ZH, EN, detect_locale
 
 
 def _template_root(locale: str) -> Path:
-    """Return the template dir bundled with this package."""
-    pkg_root = Path(__file__).resolve().parent.parent
-    if locale == "en":
-        p = pkg_root / "_template-en"
+    """Return the template dir bundled with this package.
+
+    Lookup order: inside the installed package first (site-packages layout,
+    ships in the wheel/sdist since v0.8.4), then next to the package
+    (repo checkout / editable install).
+    """
+    here = Path(__file__).resolve().parent
+    pkg_root = here.parent
+    for root in (here, pkg_root):
+        if locale == "en":
+            p = root / "_template-en"
+            if p.is_dir():
+                return p
+        p = root / "_template"
         if p.is_dir():
             return p
-    p = pkg_root / "_template"
-    if p.is_dir():
-        return p
     raise FileNotFoundError(
-        f"template dir not found next to package (looked for _template / _template-en "
-        f"under {pkg_root}). Run from a checkout of the three-layer-agent-memory repo."
+        f"template dir not found (looked inside package {here} and next to it "
+        f"{pkg_root}). Reinstall the package or run from a repo checkout."
     )
 
 
