@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "three-layer-agent-memory"
-version = "0.8.2"
+version = "0.8.3"
 description = "A filesystem-native, version-controllable long-memory paradigm for AI agents. Surface/Middle/Deep layers + recall/writeback/consolidate protocol. Pure Markdown, zero infra, drives agent self-evolution."
 readme = "README.md"
 license = { file = "LICENSE" }
