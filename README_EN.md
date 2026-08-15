@@ -196,6 +196,25 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 ./scripts/secret-scan.sh   # confirm no real secrets in the library
 ```
 
+## Aspiration vs Verified
+
+The long-term goal of this project is to **surpass the limits of human memory**. To honestly separate "where we aim" from "where we are", the goal is decomposed into a six-level ladder (see [EVOLUTION.md](EVOLUTION.md)):
+
+| Level | Name | Status (2026-08-15) |
+|---|---|---|
+| L0 | Outlive agents — takeover with zero human explanation | ✅ Verified ×3 |
+| L1 | Auditable — any decision reconstructable | ◐ Partial |
+| L2 | Errors guard the path — mistakes reclassified as boundaries, actively recalled, periodically revisited | ◐ Prototype |
+| L3 | Knows its blind spots | ◐ Prototype |
+| L4 | Calibrated self-prediction | ◐ Prototype |
+| L5 | Closed-loop self-revision (permanent human veto) | ❌ Not started |
+
+Core claim (L2): **there is no forgetting, only classification**. The human weakness is that boundaries fade — the scar heals and the pain is forgotten, so mistakes repeat. This paradigm's answer: never delete a mistake; reclassify it as a boundary, actively recall it when the path approaches, and revisit it periodically. Demotion is not forgetting — it is a transfer from *directing* behavior to *guarding* behavior.
+
+### Verified case: cross-model cold-start takeover (L0, 2026-08-15)
+
+A third model family (zcode / GLM-5.3, never before exposed to this project), given nothing but the memory-bank path and zero human explanation: read all three layers → located real defects (surface layer three weeks stale, contradictory todo items, archiving never executed) → repaired them under the paradigm's own rules (never touched verbatim-preserved zones, archived instead of deleting, append-only deep layer) → fixed real bugs in the public repo and sync code. The entire handoff context came **100% from the memory bank**. Third verification of "agents pass, memory stays" — and the first across model families.
+
 ## Commercial
 
 Cloud services for cross-device and cross-agent memory sharing:

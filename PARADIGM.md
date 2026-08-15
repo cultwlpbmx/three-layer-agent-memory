@@ -95,3 +95,19 @@
 - 无文件系统访问的纯沙箱 agent（需要 adapter 改用远端存储）
 
 它不与 RAG/向量检索冲突——后者解决"找相关知识"，本范式解决"保持方向与自我"。二者可叠加：本范式做顶层锚，RAG 做中层检索。
+## 7. 目标阶梯（Aspiration Ladder）
+
+本范式的长期目标是超越人类记忆的局限。为了让这个目标可检验而非口号，把它拆成六级阶梯——**目标是愿景，声明只限于已验证的事实**：
+
+| Level | Name | Criterion | Status (2026-08-15) |
+|---|---|---|---|
+| L0 | Outlive agents | A new agent/model takes over correctly with zero human explanation | ✅ Verified ×3 (claude → codex → zcode/GLM) |
+| L1 | Auditable | Any past decision can be reconstructed: what was known, why chosen | ◐ Partial |
+| L2 | Errors guard the path | No forgetting, only classification: mistakes become boundaries that are actively recalled and periodically revisited | ◐ Prototype |
+| L3 | Know its blind spots | Surfaces never-reflected dimensions, confirmed valuable by humans | ◐ Prototype |
+| L4 | Calibrated self-prediction | Falsification rate measured; falsified predictions actually change rules | ◐ Prototype |
+| L5 | Closed-loop self-revision | Reflection changes behavior without human relay — with permanent human veto & rollback | ❌ Not started (deliberately gated) |
+
+**L2 in one sentence**: human memory's fatal flaw is that boundaries fade — "the scar heals and the pain is forgotten" — so mistakes repeat. This paradigm's answer: never delete a mistake, **reclassify it as a boundary**, actively recall it when the path approaches, and revisit it periodically so time never dilutes it. Demotion is not forgetting; demotion is a transfer from *directing* behavior to *guarding* behavior.
+
+Rules: ladder levels only advance on one-off event evidence (not self-assessment), confirmed by a human. Claims of capability must always carry verification date and data.
