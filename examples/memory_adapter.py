@@ -33,7 +33,9 @@ from pathlib import Path
 # Make the library importable when running the script directly from a checkout
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from three_layer_memory import Memory, init as init_lib
+from three_layer_memory import Memory
+from three_layer_memory.init import init as init_lib
+from three_layer_memory.revisit import revisit_report
 from three_layer_memory.snapshot import snapshot as snapshot_lib
 from three_layer_memory.graph import (
     build_graph as build_graph_lib,
@@ -278,6 +280,12 @@ def cmd_correct(args) -> int:
     return 0
 
 
+def cmd_revisit(args) -> int:
+    """revisit <memory_dir> [--days N]"""
+    print(revisit_report(args.memory_dir, min_age_days=args.days))
+    return 0
+
+
 def cmd_predict(args) -> int:
     """predict <memory_dir>"""
     r = track_preds(args.memory_dir)
@@ -487,6 +495,11 @@ def main(argv=None) -> int:
     pco.set_defaults(func=cmd_correct)
 
     # predict subcommand
+    prv = sub.add_parser("revisit", help="L2: find watchpoints (观察哨/预测/证伪) that time has buried")
+    prv.add_argument("memory_dir")
+    prv.add_argument("--days", type=int, default=30, help="minimum age to flag (default 30)")
+    prv.set_defaults(func=cmd_revisit)
+
     pp = sub.add_parser("predict", help="track deep-layer predictions: confirmed/falsified/unverified")
     pp.add_argument("memory_dir")
     pp.set_defaults(func=cmd_predict)

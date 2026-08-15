@@ -66,6 +66,7 @@ from .meta_meta_cognition import discover_blind_spots, blind_spot_report
 from .cross_project import transfer_knowledge, transfer_report
 from .prediction_tracker import track_predictions, prediction_report
 from .self_correction import find_stale_laws, correction_report
+from .revisit import find_unrevisited, revisit_report
 from .cloud_sync import sync_status, sync_push, sync_pull, sync_report
 from .oss_sync import OSSSync, oss_sync_report
 from .auto_sync import AutoSync, SyncVersion
@@ -79,7 +80,7 @@ from .checkpoint import (
     restore_summary,
 )
 
-__version__ = "0.8.1"
+__version__ = "0.8.2"
 
 __all__ = [
     "Memory",
@@ -127,6 +128,8 @@ __all__ = [
     "prediction_report",
     "find_stale_laws",
     "correction_report",
+    "find_unrevisited",
+    "revisit_report",
     "sync_status",
     "sync_push",
     "sync_pull",

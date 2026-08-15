@@ -57,6 +57,7 @@ from three_layer_memory.auto_activation import activate as activate_lib, activat
 from three_layer_memory.deviation_monitor import check_deviation as check_dev, deviation_report
 from three_layer_memory.auto_consolidate import discover_patterns as discover_pats, pattern_report
 from three_layer_memory.reflection_quality import assess_reflections as assess_refl, quality_report
+from three_layer_memory.revisit import find_unrevisited, revisit_report
 from three_layer_memory.meta_meta_cognition import discover_blind_spots as discover_bs, blind_spot_report
 from three_layer_memory.cross_project import transfer_knowledge as transfer_kn, transfer_report
 from three_layer_memory.prediction_tracker import track_predictions as track_preds, prediction_report as pred_report
@@ -561,3 +562,22 @@ def three_layer_auto_sync(project_dir: str, action: str = "status",
 
 if __name__ == "__main__":
     mcp.run()
+
+@mcp.tool()
+def three_layer_revisit(project_dir: str, min_age_days: int = 30) -> dict:
+    """L2 revisit: find watchpoints (观察哨/预测/证伪) that time has buried.
+
+    记忆没有遗忘，只有分类——但边界若不被定期回访，等同于被遗忘。
+    Scans deep-layer sections for watchpoints older than min_age_days that are
+    never mentioned in any later section. Read-only. Recommended cadence: monthly.
+    First real run (2026-08-15) surfaced 14 unvisited watchpoints up to 49 days
+    old in the author's own bank — the exact failure mode this exists to catch.
+    """
+    r = find_unrevisited(project_dir, min_age_days=min_age_days)
+    return {
+        "sections_scanned": r["sections_scanned"],
+        "total_watchpoints": r["total_watchpoints"],
+        "unrevisited_count": len(r["unrevisited"]),
+        "unrevisited": r["unrevisited"][:20],
+        "report": revisit_report(project_dir, min_age_days=min_age_days),
+    }

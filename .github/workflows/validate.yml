@@ -1,0 +1,43 @@
+name: validate
+
+on:
+  push:
+    paths: ['three_layer_memory/**', '_template/**', '_template-en/**', '.github/workflows/validate.yml']
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      - name: Install (zero-dependency core)
+        run: pip install -e .
+      - name: Validate template banks (zh + en) and revisit on a stale fixture
+        run: |
+          python - <<'EOF'
+          import sys, tempfile
+          from pathlib import Path
+          from three_layer_memory.init import init
+          from three_layer_memory import Memory
+          from three_layer_memory.revisit import find_unrevisited
+
+          fails = []
+          for loc in ("zh", "en"):
+              bank = Path(tempfile.mkdtemp()) / f"bank-{loc}"
+              init(bank, locale=loc)
+              r = Memory(bank).validate()
+              print(f"[{loc}] ok={r.ok} violations={r.violations}")
+              if not r.ok:
+                  fails.append(f"validate:{loc}")
+
+          # revisit must be a no-op on a fresh bank (no deep sections yet)
+          rr = find_unrevisited(Path(tempfile.mkdtemp()) / "empty", min_age_days=30)
+          print(f"[revisit] fresh-bank result: {rr['unrevisited']} (expect 0)")
+          if rr["unrevisited"]:
+              fails.append("revisit:false-positive")
+
+          sys.exit(1 if fails else 0)
+          EOF

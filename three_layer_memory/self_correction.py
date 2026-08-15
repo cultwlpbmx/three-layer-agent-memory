@@ -1,10 +1,15 @@
 """
-Self-correction layer — detect when laws/rules become stale and propose demotion.
+Self-correction layer — detect when laws/rules become stale and propose
+reclassification as boundary memory.
 
 Phase 3-4 of the cognitive upgrade: laws and application rules are not permanent.
 A law that has never been applied in recent work, or has been repeatedly violated,
-may be stale and should be demoted or removed. This module detects such cases
-and proposes demotion candidates for human review.
+may be stale. Per the author-ratified L2 principle (2026-08-15): **there is no
+forgetting, only classification** — a stale or falsified rule is NOT removed or
+silenced; it is *transferred* from "directing behavior" to "guarding behavior".
+It becomes a boundary: actively recalled when the path approaches the old
+mistake, so time never dilutes the lesson ("好了伤疤忘了痛" is the human
+failure mode this exists to prevent).
 
 Demotion triggers:
   1. Law never referenced: a law_ref entity in the cognitive graph has 0 occurrences
@@ -14,7 +19,8 @@ Demotion triggers:
   3. Prediction falsified: a deep-layer prediction was falsified, and the law
      that generated it may need revision.
 
-The output is *candidate* demotions, not final actions. Human reviews and decides.
+The output is *candidate* reclassifications, not final actions. Human reviews
+and decides. Demotion = transfer (指导→守护), never deletion.
 
 Usage:
     from three_layer_memory.self_correction import find_stale_laws, correction_report
@@ -90,7 +96,7 @@ def find_stale_laws(
                         "total_occurrences": law.get("occurrences", 0),
                         "source_files": law.get("source_files", []),
                         "reason": f"not referenced in recent {len(recent_files)} records",
-                        "suggestion": "consider demoting or removing this law if no longer relevant",
+                        "suggestion": "transfer to boundary memory: stop directing, start guarding (demote != delete)",
                     })
 
     # --- 2. Check application rules for repeated violations ---
@@ -139,7 +145,7 @@ def find_stale_laws(
                 "total_occurrences": 0,
                 "source_files": [],
                 "reason": f"falsified prediction: {pred['text'][:100]}",
-                "suggestion": "revise or remove the assumption behind this falsified prediction",
+                "suggestion": "revise the assumption, then keep the falsified version as a boundary marker",
             })
     except Exception:
         pass
@@ -151,8 +157,8 @@ def find_stale_laws(
 def correction_report(result: dict) -> str:
     """Render self-correction candidates as a human/agent-readable report."""
     lines = [
-        f"# Self-Correction — Stale Law Detection",
-        f"Total demotion candidates: {result['total_candidates']}",
+        f"# Self-Correction — Stale Law Detection (boundary-transfer semantics, L2)",
+        f"Total boundary-transfer candidates: {result['total_candidates']}",
         "",
     ]
 
@@ -178,5 +184,5 @@ def correction_report(result: dict) -> str:
     if not result["stale_laws"] and not result["violated_constraints"]:
         lines.append("✅ No stale laws or violated constraints detected — all laws appear active.")
 
-    lines.append("→ These are CANDIDATE demotions for human review. The system proposes, the human disposes.")
+    lines.append("→ These are CANDIDATE boundary transfers for human review. Demotion = transfer (directing→guarding), never deletion.")
     return "\n".join(lines)
