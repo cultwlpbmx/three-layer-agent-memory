@@ -276,6 +276,8 @@ _DEEP_SECTION_RE = re.compile(r"^## .+", re.MULTILINE)
 _TAG_LINE_RE = re.compile(r"^\s*-\s*\*\*tags?\*\*\s*[:：]", re.MULTILINE | re.IGNORECASE)
 _AGENT_LINE_RE = re.compile(r"^\s*-\s*\*\*agent\*\*\s*[:：]", re.MULTILINE | re.IGNORECASE)
 _DEEP_AGENT_RE = re.compile(r"^>\s*agent\s*:", re.MULTILINE | re.IGNORECASE)
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_FNAME_DATE_RE = re.compile(r"^(\d{4}-\d{2}-\d{2})")
 
 
 def _head(path: Path, n: int) -> str:
@@ -550,6 +552,29 @@ class Memory:
                 tail = deep_content[deep_content.rfind(sections[-1]):]
                 if not _DEEP_AGENT_RE.search(tail):
                     v.append("WARN: agent signature missing in latest deep section (add '> agent: <name>' after the section header)")
+
+        # warnings — surface overview freshness (recall correctness)
+        # The overview summary is the FIRST thing recall reads. If the newest
+        # date it mentions lags behind the newest middle record, every fresh
+        # agent boots with stale context — the single most damaging form of
+        # discipline decay. Observed 2026-08-15: the author's own bank lagged
+        # three versions during a commercialization sprint. Discipline cannot
+        # be enforced, but the validator can at least SEE it.
+        if self.p["overview"].exists():
+            ov_dates = _ISO_DATE_RE.findall(
+                self.p["overview"].read_text(encoding="utf-8"))
+            mid_dates = [
+                m.group(1)
+                for f in self.p["middle_dir"].glob("*.md")
+                if (m := _FNAME_DATE_RE.match(f.name))
+            ]
+            if ov_dates and mid_dates and max(mid_dates) > max(ov_dates):
+                v.append(
+                    f"WARN: surface overview is stale — newest middle record "
+                    f"{max(mid_dates)} is not reflected in the overview "
+                    f"(newest mention there: {max(ov_dates)}); refresh the "
+                    f"summary so recall boots with current state"
+                )
 
         # warnings — recent task records should have a tags line
         for row in _tail_table_rows(self.p["index"], 5):
