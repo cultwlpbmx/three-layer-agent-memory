@@ -200,19 +200,19 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 
 Cloud services for cross-device and cross-agent memory sharing:
 
-| Feature | Free | Pro $9/mo | Team $39/mo |
+| Feature | Free | Pro ¥9.9/mo (¥99/yr) | Team ¥49/mo (¥499/yr) |
 |---|---|---|---|
-| Local library + CLI | \u2705 | \u2705 | \u2705 |
-| GitHub code repo | \u2705 | \u2705 | \u2705 |
-| OSS cloud sync | \u274c | \u2705 | \u2705 |
-| Auto-sync (agent-transparent) | \u274c | \u2705 | \u2705 |
-| Web console | \u274c | \u2705 | \u2705 |
-| MCP server | local | \u2705 | \u2705 |
-| Multi-user collaboration | \u274c | \u274c | \u2705 |
-| Cross-project transfer | \u274c | \u274c | \u2705 |
-| Meta-cognition + prediction | \u274c | \u274c | \u2705 |
-| Projects | 1 | 5 | unlimited |
-| Storage | - | 1GB | 10GB |
+| Local library + CLI | ✅ | ✅ | ✅ |
+| GitHub code repo | ✅ | ✅ | ✅ |
+| OSS cloud sync | ❌ | ✅ | ✅ |
+| Auto-sync (agent-transparent) | ❌ | ✅ | ✅ |
+| Web console | ❌ | ✅ | ✅ |
+| MCP server | local | ✅ | ✅ |
+| Multi-user collaboration | ❌ | ❌ | ✅ |
+| Cross-project transfer | ❌ | ❌ | ✅ |
+| Meta-cognition + prediction | ❌ | ❌ | ✅ |
+| Projects | 3 | 20 | unlimited |
+| Storage | - | 2GB | 10GB |
 
 **Usage:**
 
@@ -232,7 +232,7 @@ r = m.recall()    # auto pull
 m.log(...)        # auto push
 ```
 
-**Console**: [wlpworld.com](http://wlpworld.com) (ICP filing pending)
+**Console**: [wlpworld.com](https://wlpworld.com) (ICP filed, full-site HTTPS)
 
 **Core philosophy**: Memory is cognition, cognition is memory. We sell not storage, but cognitive assets — making cognition persist across devices and agents.
 

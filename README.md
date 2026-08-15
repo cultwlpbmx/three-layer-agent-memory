@@ -203,7 +203,7 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 
 本项目提供云端服务，让 AI agent 跨设备、跨 agent 共享记忆：
 
-| 功能 | 免费 | Pro ¥39/月 | Team ¥199/月 |
+| 功能 | 免费 | Pro ¥9.9/月（¥99/年） | Team ¥49/月（¥499/年） |
 |---|---|---|---|
 | 本地库 + CLI | ✅ | ✅ | ✅ |
 | GitHub 代码仓库 | ✅ | ✅ | ✅ |
@@ -214,8 +214,8 @@ echo "# Global reflection" > ~/.agent-memory/global-deep/global-reflection.md
 | 多用户协作 | ❌ | ❌ | ✅ |
 | 跨项目知识迁移 | ❌ | ❌ | ✅ |
 | 元元认知 + 预测验证 | ❌ | ❌ | ✅ |
-| 项目数 | 1 | 5 | 无限 |
-| 存储空间 | - | 1GB | 10GB |
+| 项目数 | 3 | 20 | 无限 |
+| 存储空间 | - | 2GB | 10GB |
 
 **使用方式**：
 
@@ -235,7 +235,7 @@ r = m.recall()    # 自动 pull
 m.log(...)        # 自动 push
 ```
 
-**控制台**：[wlpworld.com](http://wlpworld.com) （备案中，临时访问 `http://47.94.246.86:8088`）
+**控制台**：[wlpworld.com](https://wlpworld.com) （已备案：宁ICP备2025010683号-5，全站 HTTPS）
 
 **核心哲学**：记忆即是认知，认知即是记忆。我们卖的不是存储，是认知资产——让认知跨设备/跨 agent 持久化。
 
