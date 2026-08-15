@@ -52,8 +52,12 @@ except ImportError:
 # --- file types to sync ---
 
 SYNC_EXTENSIONS = {".md", ".json"}
-SYNC_DIRS = {"表层", "中层", "深层", "Surface", "Middle", "Deep", ".progress"}
-SKIP_DIRS = {".cognitive-graph", ".git", "__pycache__", "archive"}
+SYNC_DIRS = {"表层", "中层", "深层", "Surface", "Middle", "Deep", ".progress", "archive"}
+# archive/ holds the fossil layer of Middle records — the most precious history.
+# It must be backed up: memory banks outside git have no other copy.
+# (Found 2026-08-15: an OSS-synced non-git bank archived records into
+# archive/ and silently lost cloud backup coverage for them.)
+SKIP_DIRS = {".cognitive-graph", ".git", "__pycache__"}
 
 
 def _file_hash(path: Path) -> str:
